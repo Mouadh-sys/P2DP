@@ -15,15 +15,35 @@ from app.api import (
     templates,
 )
 from app.core.config import settings
-from app.db.database import Base, engine
-from app.db.models import Environment, Project, TemplateVersion, User
+from app.core.security import get_password_hash
+from app.db.database import Base, engine, SessionLocal
+from sqlalchemy import select
+from app.db.models import Environment, Project, TemplateVersion, User, UserRole
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # import model classes so SQLAlchemy metadata is populated
     _ = (User, Project, Environment, TemplateVersion)
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+
+    # Seed minimal users for local/dev environment if they don't exist.
+    # This is convenient for development; in production use a proper bootstrap/migration.
+    if settings.environment == "dev":
+        async with SessionLocal() as session:
+            # users to ensure exist: (email, role, password)
+            seeds = [
+                ("admin@p2dp.local", UserRole.ADMIN.value, "admin123"),
+                ("devops@p2dp.local", UserRole.DEVOPS.value, "devops123"),
+                ("security@p2dp.local", UserRole.SECURITY_VIEWER.value, "security123"),
+            ]
+            for email, role, password in seeds:
+                result = await session.execute(select(User).where(User.email == email))
+                if not result.scalar_one_or_none():
+                    user = User(email=email, role=role, password_hash=get_password_hash(password))
+                    session.add(user)
+            await session.commit()
     yield
 
 
