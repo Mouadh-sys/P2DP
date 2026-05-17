@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class EnvironmentBase(BaseModel):
     target: Literal["dev", "local-k8s"] = "local-k8s"
-    status: str = Field(default="pending", min_length=1, max_length=50)
+    status: Literal["pending", "active", "failed"] = Field(default="pending")
 
 
 class EnvironmentCreate(EnvironmentBase):
