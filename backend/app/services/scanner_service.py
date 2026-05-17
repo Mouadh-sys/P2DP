@@ -200,24 +200,26 @@ def run_trivy_scan(path: str) -> dict[str, list[dict[str, str | None]]]:
     resolved_path = str(Path(path).resolve())
     if not Path(resolved_path).is_dir():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Template path is not a directory.")
-    with tempfile.NamedTemporaryFile(delete=False, suffix="-trivy-report.json") as handle:
+    with tempfile.NamedTemporaryFile(delete=False, prefix="trivy-report-", suffix=".json") as handle:
         output_path = handle.name
     try:
-        result = subprocess.run(
-            ["trivy", "config", "--format", "json", "--output", output_path, resolved_path],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=SCAN_TIMEOUT_SECONDS,
-        )
+        try:
+            result = subprocess.run(
+                ["trivy", "config", "--format", "json", "--output", output_path, resolved_path],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=SCAN_TIMEOUT_SECONDS,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Trivy is not installed.") from exc
     except subprocess.TimeoutExpired as exc:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Trivy scan timed out."
         ) from exc
     try:
         if result.returncode != 0:
-            detail = result.stderr.strip() or result.stdout.strip() or "Trivy scan failed."
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Trivy scan failed.")
 
         if not os.path.exists(output_path):
             raise HTTPException(
@@ -243,25 +245,26 @@ def run_checkov_scan(path: str) -> dict[str, list[dict[str, str | None]]]:
     if not Path(resolved_path).is_dir():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Template path is not a directory.")
     try:
-        result = subprocess.run(
-            ["checkov", "-d", resolved_path, "-o", "json"],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=SCAN_TIMEOUT_SECONDS,
-        )
+        try:
+            result = subprocess.run(
+                ["checkov", "-d", resolved_path, "-o", "json"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=SCAN_TIMEOUT_SECONDS,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Checkov is not installed.") from exc
     except subprocess.TimeoutExpired as exc:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Checkov scan timed out."
         ) from exc
     # Checkov uses exit code 1 when policy violations are found, so treat 0 and 1 as successful runs.
     if result.returncode not in {0, 1}:
-        detail = result.stderr.strip() or result.stdout.strip() or "Checkov scan failed."
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Checkov scan failed.")
 
     if not result.stdout.strip():
-        detail = result.stderr.strip() or "Checkov did not return JSON output."
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Checkov did not return JSON output.")
 
     try:
         data = json.loads(result.stdout)

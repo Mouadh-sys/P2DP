@@ -39,6 +39,7 @@ async def _replace_findings(
     engine: str,
     payloads: list[dict[str, str | None]],
 ) -> list[Finding]:
+    """Replace existing findings for the environment/engine with the latest scan results."""
     findings = [
         Finding(
             env_id=env_id,
