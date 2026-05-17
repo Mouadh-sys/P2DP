@@ -2,25 +2,36 @@
 
 Predictive DevSecOps Deployment and Protection.
 
-## Kick start
+## Project structure
 
-This repository is now initialized with the project security requirements and scope document:
+```text
+backend/         FastAPI API, core services, workers, policies
+frontend/        React + TypeScript UI scaffold
+gitops-repo/     Desired-state manifests for Argo CD sync
+infra/           Local infra setup, k8s/helm/argocd/otel/monitoring assets
+samples/         Vulnerable and secure IaC/Kubernetes sample scenarios
+docs/            Architecture, API, demo, and reporting documentation
+```
 
-- [`docs/cahier-des-charges.md`](docs/cahier-des-charges.md)
+## Backend quick start
 
-## MVP layers
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
 
-1. **Infrastructure Deployment Engine** (upload, validation, simulation, GitOps deployment)
-2. **Misconfiguration Detection** (Trivy, Checkov, OPA/Conftest)
-3. **Risk Forecasting** (heuristic score in MVP, ML extension)
-4. **Threat Detection** (runtime monitoring, Falco, logs/events correlation)
+## Frontend quick start
 
-## Target architecture (high level)
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-- Frontend: React + TypeScript
-- Backend: FastAPI + Celery + Redis + PostgreSQL
-- Security/Scan: Trivy, Checkov, OPA/Conftest
-- GitOps: Argo CD
-- Observability: OpenTelemetry + Jaeger + Prometheus + Loki + Grafana
+## Notes
 
-For full requirements, acceptance criteria, and detailed functional scope, refer to the cahier des charges.
+- This is an initialized scaffold aligned with the P2DP architecture and stack from the cahier des charges.
+- The implementation layers (deployment engine, scanning, risk, monitoring) are intentionally stubbed for iterative development.
