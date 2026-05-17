@@ -1,0 +1,57 @@
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Repo instructions / local notes
+AGENTS.md
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.template
+backend/.env
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.venv/
+venv/
+env/
+backend/.venv/
+backend/venv/
+*.egg-info/
+
+# Node / Vite
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+build/
+frontend/.vite/
+*.tsbuildinfo
+
+# Logs / runtime artifacts
+*.log
+*.pid
+*.seed
+celerybeat-schedule
+*.sqlite3
+*.db
+
+# Local compose overrides
+docker-compose.override.yml
+compose.override.yml
