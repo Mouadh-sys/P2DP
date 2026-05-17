@@ -12,6 +12,8 @@ from app.api import (
     templates,
 )
 from app.core.config import settings
+from app.db.database import Base, engine
+from app.db.models import Environment, Project, TemplateVersion, User
 
 app = FastAPI(title=settings.app_name)
 
@@ -29,3 +31,10 @@ app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 @app.get("/health", tags=["system"])
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.on_event("startup")
+async def on_startup() -> None:
+    _ = (User, Project, Environment, TemplateVersion)
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
