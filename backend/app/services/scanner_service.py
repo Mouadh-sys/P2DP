@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import stat
 import subprocess
 import tarfile
 import tempfile
@@ -41,13 +43,30 @@ def _extract_archive(archive_path: str, destination: Path) -> None:
     lower = archive_path.lower()
     if lower.endswith(".zip"):
         with zipfile.ZipFile(archive_path, "r") as archive:
+            destination_root = destination.resolve()
             for info in archive.infolist():
                 if not _is_safe_member(info.filename):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Invalid filename in archive: {info.filename}",
                     )
-            archive.extractall(destination)
+                if stat.S_ISLNK(info.external_attr >> 16):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Symlink entries are not allowed: {info.filename}",
+                    )
+                target = (destination / info.filename).resolve()
+                if not str(target).startswith(str(destination_root)):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid filename in archive: {info.filename}",
+                    )
+                if info.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(info) as source, open(target, "wb") as dest_file:
+                    shutil.copyfileobj(source, dest_file)
         return
 
     if lower.endswith((".tar.gz", ".tgz", ".tar")):
@@ -56,13 +75,33 @@ def _extract_archive(archive_path: str, destination: Path) -> None:
         else:
             mode = "r:"
         with tarfile.open(archive_path, mode) as archive:
+            destination_root = destination.resolve()
             for member in archive.getmembers():
                 if not _is_safe_member(member.name):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Invalid filename in archive: {member.name}",
                     )
-            archive.extractall(destination)
+                if member.issym() or member.islnk():
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Symlink entries are not allowed: {member.name}",
+                    )
+                target = (destination / member.name).resolve()
+                if not str(target).startswith(str(destination_root)):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid filename in archive: {member.name}",
+                    )
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                source = archive.extractfile(member)
+                if source is None:
+                    continue
+                with source, open(target, "wb") as dest_file:
+                    shutil.copyfileobj(source, dest_file)
         return
 
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported template archive format.")
@@ -215,6 +254,7 @@ def run_checkov_scan(path: str) -> dict[str, list[dict[str, str | None]]]:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Checkov scan timed out."
         ) from exc
+    # Checkov uses exit code 1 when policy violations are found, so treat 0 and 1 as successful runs.
     if result.returncode not in {0, 1}:
         detail = result.stderr.strip() or result.stdout.strip() or "Checkov scan failed."
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)

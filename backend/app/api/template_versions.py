@@ -12,6 +12,7 @@ from app.schemas.finding import FindingRead
 from app.services.scanner_service import scan_template_with_checkov, scan_template_with_trivy
 
 router = APIRouter()
+FINDING_LAYER = "L2"
 
 
 async def _get_template_version_for_user(
@@ -41,7 +42,7 @@ async def _replace_findings(
     findings = [
         Finding(
             env_id=env_id,
-            layer="L2",
+            layer=FINDING_LAYER,
             engine=engine,
             rule_id=payload["rule_id"],
             severity=payload["severity"],
