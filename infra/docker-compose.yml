@@ -12,9 +12,9 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: p2dp
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-p2dp}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
 
   redis:
     image: redis:7-alpine
