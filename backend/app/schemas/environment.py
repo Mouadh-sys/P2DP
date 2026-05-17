@@ -1,12 +1,12 @@
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class EnvironmentBase(BaseModel):
-    target: Literal["dev", "local-k8s"] = "local-k8s"
-    status: Literal["pending", "active", "failed"] = Field(default="pending")
+    target: Literal["dev", "local-k8s"]
+    status: Literal["pending", "active", "failed"]
 
 
 class EnvironmentCreate(EnvironmentBase):

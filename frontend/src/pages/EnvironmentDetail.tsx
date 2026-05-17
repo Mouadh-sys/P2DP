@@ -25,7 +25,7 @@ type Environment = {
 export default function EnvironmentDetail() {
   const { projectId } = useParams();
   const [target, setTarget] = useState<"dev" | "local-k8s">("local-k8s");
-  const [status, setStatus] = useState("pending");
+  const [status, setStatus] = useState<"pending" | "active" | "failed">("pending");
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [fileByEnv, setFileByEnv] = useState<Record<string, File | null>>({});
   const [message, setMessage] = useState("");
@@ -101,7 +101,18 @@ export default function EnvironmentDetail() {
               <MenuItem value="dev">dev</MenuItem>
               <MenuItem value="local-k8s">local-k8s</MenuItem>
             </TextField>
-            <TextField label="Status" value={status} onChange={(e) => setStatus(e.target.value)} required />
+            <TextField
+              select
+              label="Status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as "pending" | "active" | "failed")}
+              required
+              sx={{ minWidth: 180 }}
+            >
+              <MenuItem value="pending">pending</MenuItem>
+              <MenuItem value="active">active</MenuItem>
+              <MenuItem value="failed">failed</MenuItem>
+            </TextField>
             <Button type="submit" variant="contained">
               Create Environment
             </Button>
