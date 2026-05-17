@@ -55,7 +55,7 @@ class StorageService:
         except (BotoCoreError, ClientError, OSError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to upload template to storage",
+                detail="Failed to upload template to MinIO storage. Verify endpoint, credentials, and bucket access.",
             ) from exc
         return object_key
 
