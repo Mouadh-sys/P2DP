@@ -9,7 +9,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import client from "../api/client";
@@ -30,7 +30,7 @@ export default function EnvironmentDetail() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const loadEnvironments = async () => {
+  const loadEnvironments = useCallback(async () => {
     if (!projectId) return;
     try {
       const response = await client.get<Environment[]>(`/api/environments/projects/${projectId}`);
@@ -39,11 +39,11 @@ export default function EnvironmentDetail() {
     } catch {
       setError("Failed to load environments.");
     }
-  };
+  }, [projectId]);
 
   useEffect(() => {
     loadEnvironments();
-  }, [projectId]);
+  }, [loadEnvironments]);
 
   const handleCreateEnvironment = async (event: FormEvent) => {
     event.preventDefault();

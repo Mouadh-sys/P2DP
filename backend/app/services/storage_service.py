@@ -36,6 +36,12 @@ class StorageService:
         upload_file: UploadFile,
     ) -> str:
         object_key = f"projects/{project_id}/{environment_id}/{template_version_id}/source.tar.gz"
+        filename = upload_file.filename or ""
+        if not filename.endswith((".tar.gz", ".tgz", ".zip")):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Template upload must be an archive (.tar.gz, .tgz, or .zip)",
+            )
         try:
             self._ensure_bucket_exists()
             upload_file.file.seek(0)

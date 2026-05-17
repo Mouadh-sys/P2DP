@@ -73,15 +73,12 @@ export default function Projects() {
         {projects.map((project) => (
           <Grid2 size={{ xs: 12, sm: 6, md: 4 }} key={project.id}>
             <Card>
-              <CardActionArea onClick={() => navigate(`/projects/${project.id}/environments`)}>
-                <CardContent>
-                  <Typography variant="h6">{project.name}</Typography>
-                  <Typography color="text.secondary" variant="body2">
-                    Owner: {project.owner_id}
-                  </Typography>
-                </CardContent>
-              </CardActionArea>
-            </Card>
+                <CardActionArea onClick={() => navigate(`/projects/${project.id}/environments`)}>
+                  <CardContent>
+                    <Typography variant="h6">{project.name}</Typography>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
           </Grid2>
         ))}
       </Grid2>
