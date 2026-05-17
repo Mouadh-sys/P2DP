@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Card,
-  CardActionArea,
   CardContent,
   Dialog,
   DialogActions,
@@ -25,17 +24,38 @@ type Project = {
   owner_id: string;
 };
 
+type Environment = {
+  id: string;
+  project_id: string;
+  target: "dev" | "local-k8s";
+  status: string;
+};
+
 export default function Projects() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [environmentsByProject, setEnvironmentsByProject] = useState<Record<string, Environment[]>>({});
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
 
   const loadProjects = async () => {
     try {
-      const response = await client.get<Project[]>("/api/projects");
-      setProjects(response.data);
+      const projectsResponse = await client.get<Project[]>("/api/projects");
+      setProjects(projectsResponse.data);
+      const environmentResponses = await Promise.allSettled(
+        projectsResponse.data.map(async (project) => {
+          const response = await client.get<Environment[]>(`/api/projects/${project.id}/environments`);
+          return [project.id, response.data] as const;
+        })
+      );
+      setEnvironmentsByProject(
+        Object.fromEntries(
+          environmentResponses
+            .filter((result): result is PromiseFulfilledResult<readonly [string, Environment[]]> => result.status === "fulfilled")
+            .map((result) => result.value)
+        )
+      );
       setError("");
     } catch {
       setError("Failed to load projects.");
@@ -73,12 +93,21 @@ export default function Projects() {
         {projects.map((project) => (
           <Grid2 size={{ xs: 12, sm: 6, md: 4 }} key={project.id}>
             <Card>
-                <CardActionArea onClick={() => navigate(`/projects/${project.id}/environments`)}>
-                  <CardContent>
-                    <Typography variant="h6">{project.name}</Typography>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
+              <CardContent>
+                <Typography variant="h6" mb={1}>
+                  {project.name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                  Environments:{" "}
+                  {environmentsByProject[project.id]?.length
+                    ? environmentsByProject[project.id].map((env) => env.target).join(", ")
+                    : "none"}
+                </Typography>
+                <Button variant="outlined" onClick={() => navigate(`/projects/${project.id}/environments`)}>
+                  Open project
+                </Button>
+              </CardContent>
+            </Card>
           </Grid2>
         ))}
       </Grid2>

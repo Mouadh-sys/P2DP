@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  MenuItem,
   Grid2,
   Stack,
   TextField,
@@ -17,14 +18,14 @@ import client from "../api/client";
 type Environment = {
   id: string;
   project_id: string;
-  target: string;
+  target: "dev" | "local-k8s";
   status: string;
 };
 
 export default function EnvironmentDetail() {
   const { projectId } = useParams();
-  const [target, setTarget] = useState("local-k8s");
-  const [status, setStatus] = useState("pending");
+  const [target, setTarget] = useState<"dev" | "local-k8s">("local-k8s");
+  const [status, setStatus] = useState<"pending" | "active" | "failed">("pending");
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [fileByEnv, setFileByEnv] = useState<Record<string, File | null>>({});
   const [message, setMessage] = useState("");
@@ -33,7 +34,7 @@ export default function EnvironmentDetail() {
   const loadEnvironments = useCallback(async () => {
     if (!projectId) return;
     try {
-      const response = await client.get<Environment[]>(`/api/environments/projects/${projectId}`);
+      const response = await client.get<Environment[]>(`/api/projects/${projectId}/environments`);
       setEnvironments(response.data);
       setError("");
     } catch {
@@ -49,8 +50,9 @@ export default function EnvironmentDetail() {
     event.preventDefault();
     if (!projectId) return;
     try {
-      await client.post(`/api/environments/projects/${projectId}`, { target, status });
+      await client.post(`/api/projects/${projectId}/environments`, { target, status });
       setMessage("Environment created successfully.");
+      setError("");
       await loadEnvironments();
     } catch {
       setError("Failed to create environment.");
@@ -85,15 +87,42 @@ export default function EnvironmentDetail() {
       {message ? <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert> : null}
       {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
 
-      <Box component="form" onSubmit={handleCreateEnvironment} sx={{ mb: 3 }}>
-        <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-          <TextField label="Target" value={target} onChange={(e) => setTarget(e.target.value)} required />
-          <TextField label="Status" value={status} onChange={(e) => setStatus(e.target.value)} required />
-          <Button type="submit" variant="contained">
-            Create Environment
-          </Button>
-        </Stack>
-      </Box>
+      {environments.length === 0 ? (
+        <Box component="form" onSubmit={handleCreateEnvironment} sx={{ mb: 3 }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+            <TextField
+              select
+              label="Target"
+              value={target}
+              onChange={(e) => setTarget(e.target.value as "dev" | "local-k8s")}
+              required
+              sx={{ minWidth: 180 }}
+            >
+              <MenuItem value="dev">dev</MenuItem>
+              <MenuItem value="local-k8s">local-k8s</MenuItem>
+            </TextField>
+            <TextField
+              select
+              label="Status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as "pending" | "active" | "failed")}
+              required
+              sx={{ minWidth: 180 }}
+            >
+              <MenuItem value="pending">pending</MenuItem>
+              <MenuItem value="active">active</MenuItem>
+              <MenuItem value="failed">failed</MenuItem>
+            </TextField>
+            <Button type="submit" variant="contained">
+              Create Environment
+            </Button>
+          </Stack>
+        </Box>
+      ) : (
+        <Typography variant="body2" color="text.secondary" mb={3}>
+          This project already has its single MVP environment.
+        </Typography>
+      )}
 
       <Grid2 container spacing={2}>
         {environments.map((environment) => (
