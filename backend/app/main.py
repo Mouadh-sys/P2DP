@@ -13,6 +13,7 @@ from app.api import (
     reports,
     risk,
     templates,
+    template_versions,
 )
 from app.core.config import settings
 from app.core.security import get_password_hash
@@ -53,6 +54,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(environments.router, prefix="/api/environments", tags=["environments"])
 app.include_router(templates.router, prefix="/api/templates", tags=["templates"])
+app.include_router(template_versions.router, prefix="/api/template-versions", tags=["template-versions"])
 app.include_router(deployments.router, prefix="/api/deployments", tags=["deployments"])
 app.include_router(findings.router, prefix="/api/findings", tags=["findings"])
 app.include_router(risk.router, prefix="/api/risk", tags=["risk"])

@@ -168,5 +168,30 @@ class StorageService:
             except OSError:
                 pass
 
+    def download_template_archive(self, object_key: str, destination_dir: str | None = None) -> str:
+        destination = Path(destination_dir) if destination_dir else Path(tempfile.mkdtemp())
+        destination.mkdir(parents=True, exist_ok=True)
+        filename = Path(object_key).name
+        target_path = destination / filename
+        try:
+            self.client.download_file(self.bucket, object_key, str(target_path))
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "404":
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Template archive not found in storage.",
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to download template from MinIO storage. Verify endpoint, credentials, and bucket access.",
+            ) from exc
+        except (BotoCoreError, OSError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to download template from MinIO storage. Verify endpoint, credentials, and bucket access.",
+            ) from exc
+
+        return str(target_path)
+
 
 storage_service = StorageService()
