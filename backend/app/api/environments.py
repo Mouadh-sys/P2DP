@@ -14,6 +14,24 @@ from app.services.storage_service import storage_service
 router = APIRouter()
 
 
+@router.get("/{environment_id}", response_model=EnvironmentRead)
+async def get_environment(
+    environment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Environment:
+    env_result = await db.execute(
+        select(Environment, Project)
+        .join(Project, Environment.project_id == Project.id)
+        .where(Environment.id == environment_id, Project.owner_id == current_user.id)
+    )
+    row = env_result.first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Environment not found")
+    environment, _project = row
+    return environment
+
+
 @router.post("/projects/{project_id}", response_model=EnvironmentRead, status_code=status.HTTP_201_CREATED)
 async def create_environment(
     project_id: uuid.UUID,
@@ -27,6 +45,13 @@ async def create_environment(
     project = project_result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    existing_env_result = await db.execute(select(Environment).where(Environment.project_id == project_id))
+    if existing_env_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Project already has an environment",
+        )
 
     environment = Environment(project_id=project.id, target=environment_in.target, status=environment_in.status)
     db.add(environment)
