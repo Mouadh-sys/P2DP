@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     minio_endpoint: str = "http://minio:9000"
     minio_access_key: str
     minio_secret_key: str
-    minio_bucket: str = "p2dp-templates"
+    # default bucket used to store uploaded artifacts
+    minio_bucket: str = "p2dp-artifacts"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
