@@ -50,7 +50,11 @@ def _extract_archive(archive_path: str, destination: Path) -> None:
         return
 
     if lower.endswith((".tar.gz", ".tgz", ".tar")):
-        with tarfile.open(archive_path, "r:*") as archive:
+        if lower.endswith((".tar.gz", ".tgz")):
+            mode = "r:gz"
+        else:
+            mode = "r:"
+        with tarfile.open(archive_path, mode) as archive:
             for member in archive.getmembers():
                 if not _is_safe_member(member.name):
                     raise HTTPException(
@@ -153,9 +157,17 @@ def _parse_checkov_results(data: dict) -> list[dict[str, str | None]]:
 
 
 def run_trivy_scan(path: str) -> dict[str, list[dict[str, str | None]]]:
-    output_path = os.path.join(os.path.dirname(path), "trivy-report.json")
+    resolved_path = str(Path(path).resolve())
+    if not Path(resolved_path).is_dir():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Template path is not a directory.")
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        dir=os.path.dirname(resolved_path),
+        suffix="-trivy-report.json",
+    ) as handle:
+        output_path = handle.name
     result = subprocess.run(
-        ["trivy", "config", "--format", "json", "--output", output_path, path],
+        ["trivy", "config", "--format", "json", "--output", output_path, resolved_path],
         capture_output=True,
         text=True,
         check=False,
@@ -177,8 +189,11 @@ def run_trivy_scan(path: str) -> dict[str, list[dict[str, str | None]]]:
 
 
 def run_checkov_scan(path: str) -> dict[str, list[dict[str, str | None]]]:
+    resolved_path = str(Path(path).resolve())
+    if not Path(resolved_path).is_dir():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Template path is not a directory.")
     result = subprocess.run(
-        ["checkov", "-d", path, "-o", "json"],
+        ["checkov", "-d", resolved_path, "-o", "json"],
         capture_output=True,
         text=True,
         check=False,

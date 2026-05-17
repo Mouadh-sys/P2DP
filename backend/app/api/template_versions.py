@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -67,7 +68,7 @@ async def scan_template_version_trivy(
     template_version, environment, _project = await _get_template_version_for_user(
         template_version_id, db, current_user
     )
-    payloads = scan_template_with_trivy(template_version.files_ref)
+    payloads = await asyncio.to_thread(scan_template_with_trivy, template_version.files_ref)
     return await _replace_findings(db, environment.id, "trivy", payloads)
 
 
@@ -80,5 +81,5 @@ async def scan_template_version_checkov(
     template_version, environment, _project = await _get_template_version_for_user(
         template_version_id, db, current_user
     )
-    payloads = scan_template_with_checkov(template_version.files_ref)
+    payloads = await asyncio.to_thread(scan_template_with_checkov, template_version.files_ref)
     return await _replace_findings(db, environment.id, "checkov", payloads)
