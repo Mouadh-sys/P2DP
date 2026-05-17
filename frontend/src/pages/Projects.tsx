@@ -43,13 +43,19 @@ export default function Projects() {
     try {
       const projectsResponse = await client.get<Project[]>("/api/projects");
       setProjects(projectsResponse.data);
-      const environmentResponses = await Promise.all(
+      const environmentResponses = await Promise.allSettled(
         projectsResponse.data.map(async (project) => {
           const response = await client.get<Environment[]>(`/api/projects/${project.id}/environments`);
           return [project.id, response.data] as const;
         })
       );
-      setEnvironmentsByProject(Object.fromEntries(environmentResponses));
+      setEnvironmentsByProject(
+        Object.fromEntries(
+          environmentResponses
+            .filter((result): result is PromiseFulfilledResult<readonly [string, Environment[]]> => result.status === "fulfilled")
+            .map((result) => result.value)
+        )
+      );
       setError("");
     } catch {
       setError("Failed to load projects.");

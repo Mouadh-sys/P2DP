@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import get_current_user
 from app.db.database import get_db
 from app.db.models import Environment, Project, TemplateVersion, User
-from app.schemas.environment import EnvironmentCreate, EnvironmentRead
+from app.schemas.environment import EnvironmentRead
 from app.schemas.template_version import TemplateVersionRead
 from app.services.storage_service import storage_service
 
@@ -30,52 +30,6 @@ async def get_environment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Environment not found")
     environment, _project = row
     return environment
-
-
-@router.post("/projects/{project_id}", response_model=EnvironmentRead, status_code=status.HTTP_201_CREATED)
-async def create_environment(
-    project_id: uuid.UUID,
-    environment_in: EnvironmentCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> Environment:
-    project_result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.owner_id == current_user.id)
-    )
-    project = project_result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-
-    existing_env_result = await db.execute(select(Environment).where(Environment.project_id == project_id))
-    if existing_env_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Project already has an environment",
-        )
-
-    environment = Environment(project_id=project.id, target=environment_in.target, status=environment_in.status)
-    db.add(environment)
-    await db.commit()
-    await db.refresh(environment)
-    return environment
-
-
-@router.get("/projects/{project_id}", response_model=list[EnvironmentRead])
-async def list_project_environments(
-    project_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> list[Environment]:
-    project_result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.owner_id == current_user.id)
-    )
-    if not project_result.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-
-    env_result = await db.execute(
-        select(Environment).where(Environment.project_id == project_id).order_by(Environment.id.asc())
-    )
-    return list(env_result.scalars().all())
 
 
 @router.post("/{environment_id}/upload", response_model=TemplateVersionRead, status_code=status.HTTP_201_CREATED)
