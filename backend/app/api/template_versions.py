@@ -38,7 +38,6 @@ async def _replace_findings(
     engine: str,
     payloads: list[dict[str, str | None]],
 ) -> list[Finding]:
-    await db.execute(delete(Finding).where(Finding.env_id == env_id, Finding.engine == engine))
     findings = [
         Finding(
             env_id=env_id,
@@ -52,8 +51,9 @@ async def _replace_findings(
         )
         for payload in payloads
     ]
-    db.add_all(findings)
-    await db.commit()
+    async with db.begin():
+        await db.execute(delete(Finding).where(Finding.env_id == env_id, Finding.engine == engine))
+        db.add_all(findings)
     for finding in findings:
         await db.refresh(finding)
     return findings

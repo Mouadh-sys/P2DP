@@ -13,6 +13,7 @@ from fastapi import HTTPException, status
 from app.services.storage_service import storage_service
 
 ALLOWED_SEVERITIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+SCAN_TIMEOUT_SECONDS = 300
 
 
 def _normalize_severity(value: str | None) -> str:
@@ -160,44 +161,60 @@ def run_trivy_scan(path: str) -> dict[str, list[dict[str, str | None]]]:
     resolved_path = str(Path(path).resolve())
     if not Path(resolved_path).is_dir():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Template path is not a directory.")
-    with tempfile.NamedTemporaryFile(
-        delete=False,
-        dir=os.path.dirname(resolved_path),
-        suffix="-trivy-report.json",
-    ) as handle:
+    with tempfile.NamedTemporaryFile(delete=False, suffix="-trivy-report.json") as handle:
         output_path = handle.name
-    result = subprocess.run(
-        ["trivy", "config", "--format", "json", "--output", output_path, resolved_path],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or "Trivy scan failed."
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
-
-    if not os.path.exists(output_path):
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Trivy did not produce an output report.")
-
     try:
-        with open(output_path, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Invalid Trivy JSON output.") from exc
+        result = subprocess.run(
+            ["trivy", "config", "--format", "json", "--output", output_path, resolved_path],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=SCAN_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Trivy scan timed out."
+        ) from exc
+    try:
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip() or "Trivy scan failed."
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
 
-    return {"findings": _parse_trivy_results(data)}
+        if not os.path.exists(output_path):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY, detail="Trivy did not produce an output report."
+            )
+
+        try:
+            with open(output_path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Invalid Trivy JSON output.") from exc
+
+        return {"findings": _parse_trivy_results(data)}
+    finally:
+        try:
+            os.unlink(output_path)
+        except OSError:
+            pass
 
 
 def run_checkov_scan(path: str) -> dict[str, list[dict[str, str | None]]]:
     resolved_path = str(Path(path).resolve())
     if not Path(resolved_path).is_dir():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Template path is not a directory.")
-    result = subprocess.run(
-        ["checkov", "-d", resolved_path, "-o", "json"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["checkov", "-d", resolved_path, "-o", "json"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=SCAN_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Checkov scan timed out."
+        ) from exc
     if result.returncode not in {0, 1}:
         detail = result.stderr.strip() or result.stdout.strip() or "Checkov scan failed."
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
