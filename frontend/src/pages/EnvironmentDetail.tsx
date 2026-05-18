@@ -34,8 +34,17 @@ export default function EnvironmentDetail() {
   const loadEnvironments = useCallback(async () => {
     if (!projectId) return;
     try {
-      const response = await client.get<Environment[]>(`/api/projects/${projectId}/environments`);
-      setEnvironments(response.data);
+      const listResponse = await client.get<Environment[]>(`/api/projects/${projectId}/environments`);
+      if (listResponse.data.length === 0) {
+        setEnvironments([]);
+        setError("");
+        return;
+      }
+
+      const details = await Promise.all(
+        listResponse.data.map((env) => client.get<Environment>(`/api/environments/${env.id}`).then((r) => r.data))
+      );
+      setEnvironments(details);
       setError("");
     } catch {
       setError("Failed to load environments.");

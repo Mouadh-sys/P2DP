@@ -36,6 +36,7 @@ export default function Projects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [environmentsByProject, setEnvironmentsByProject] = useState<Record<string, Environment[]>>({});
   const [open, setOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
 
@@ -78,6 +79,17 @@ export default function Projects() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await client.delete(`/api/projects/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      await loadProjects();
+    } catch {
+      setError("Failed to delete project.");
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
@@ -103,14 +115,34 @@ export default function Projects() {
                     ? environmentsByProject[project.id].map((env) => env.target).join(", ")
                     : "none"}
                 </Typography>
-                <Button variant="outlined" onClick={() => navigate(`/projects/${project.id}/environments`)}>
-                  Open project
-                </Button>
+                <Stack direction="row" spacing={1}>
+                  <Button variant="outlined" onClick={() => navigate(`/projects/${project.id}/environments`)}>
+                    Open project
+                  </Button>
+                  <Button variant="outlined" color="error" onClick={() => setDeleteTarget(project)}>
+                    Delete
+                  </Button>
+                </Stack>
               </CardContent>
             </Card>
           </Grid2>
         ))}
       </Grid2>
+
+      <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Delete project</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Delete &quot;{deleteTarget?.name}&quot;? This removes its environment and uploaded templates.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleDelete}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleCreate}>

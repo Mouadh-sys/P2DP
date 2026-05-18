@@ -9,11 +9,13 @@ from app.core.security import get_current_user
 from app.db.database import get_db
 from app.db.models import Environment, Finding, Project, TemplateVersion, User
 from app.schemas.finding import FindingRead
+from app.schemas.validation import ValidationQueuedResponse
 from app.services.scanner_service import (
     scan_template_with_checkov,
     scan_template_with_policies,
     scan_template_with_trivy,
 )
+from app.workers.validation_tasks import validate_template_task
 
 router = APIRouter()
 FINDING_LAYER = "L2"
@@ -63,6 +65,21 @@ async def _replace_findings(
     for finding in findings:
         await db.refresh(finding)
     return findings
+
+
+@router.post(
+    "/{template_version_id}/validate",
+    response_model=ValidationQueuedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def validate_template_version(
+    template_version_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ValidationQueuedResponse:
+    await _get_template_version_for_user(template_version_id, db, current_user)
+    task = validate_template_task.delay(str(template_version_id))
+    return ValidationQueuedResponse(task_id=task.id)
 
 
 @router.post("/{template_version_id}/scan/trivy", response_model=list[FindingRead], status_code=status.HTTP_201_CREATED)

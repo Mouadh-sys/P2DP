@@ -193,5 +193,32 @@ class StorageService:
 
         return str(target_path)
 
+    def upload_text(self, object_key: str, content: str, content_type: str = "text/plain") -> str:
+        try:
+            self._ensure_bucket_exists()
+            self.client.put_object(
+                Bucket=self.bucket,
+                Key=object_key,
+                Body=content.encode("utf-8"),
+                ContentType=content_type,
+            )
+        except (BotoCoreError, ClientError, OSError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to upload artifact to MinIO storage.",
+            ) from exc
+        return object_key
+
+    def validation_log_key(
+        self,
+        project_id: uuid.UUID,
+        environment_id: uuid.UUID,
+        template_version_id: uuid.UUID,
+    ) -> str:
+        return (
+            f"projects/{project_id}/envs/{environment_id}/templates/"
+            f"{template_version_id}/artifacts/validation-log.txt"
+        )
+
 
 storage_service = StorageService()

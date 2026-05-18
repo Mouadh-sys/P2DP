@@ -67,6 +67,11 @@ all_containers[container] {
   container := spec.initContainers[_]
 }
 
+all_containers[container] {
+  spec := pod_spec(input)
+  container := spec.ephemeralContainers[_]
+}
+
 effective_run_as_non_root(container, spec) = value {
   value := container.securityContext.runAsNonRoot
 } else = value {
@@ -93,6 +98,20 @@ violation_object(id, severity, resource, msg, recommendation) = output {
   }
 }
 
+# Policy 1 — No privileged containers
+deny[violation] {
+  spec := pod_spec(input)
+  spec.securityContext.privileged == true
+  resource := resource_identifier(input)
+  violation := violation_object(
+    "P2DP-K8S-001",
+    "HIGH",
+    resource,
+    "Pod securityContext.privileged is true.",
+    "Remove privileged=true from the pod securityContext.",
+  )
+}
+
 deny[violation] {
   spec := pod_spec(input)
   container := all_containers[_]
@@ -108,6 +127,7 @@ deny[violation] {
   )
 }
 
+# Policy 2 — No runAsRoot / require runAsNonRoot
 deny[violation] {
   spec := pod_spec(input)
   spec.securityContext.runAsUser == 0
@@ -151,6 +171,7 @@ deny[violation] {
   )
 }
 
+# Policy 3 — No hostPath volumes
 deny[violation] {
   spec := pod_spec(input)
   volume := spec.volumes[_]
@@ -167,6 +188,7 @@ deny[violation] {
   )
 }
 
+# Policy 4 — No LoadBalancer/NodePort without justification annotation
 deny[violation] {
   input.kind == "Service"
   input.spec.type == "LoadBalancer"
@@ -195,6 +217,7 @@ deny[violation] {
   )
 }
 
+# Policy 5 — No cluster-admin binding
 deny[violation] {
   input.kind == "ClusterRoleBinding"
   input.roleRef.name == "cluster-admin"
@@ -210,13 +233,14 @@ deny[violation] {
 
 deny[violation] {
   input.kind == "RoleBinding"
+  input.roleRef.kind == "ClusterRole"
   input.roleRef.name == "cluster-admin"
   resource := resource_identifier(input)
   violation := violation_object(
     "P2DP-K8S-006",
     "HIGH",
     resource,
-    "RoleBinding grants cluster-admin.",
+    "RoleBinding grants cluster-admin ClusterRole.",
     "Bind to a least-privilege Role or ClusterRole instead of cluster-admin.",
   )
 }
