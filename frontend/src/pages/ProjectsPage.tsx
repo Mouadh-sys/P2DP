@@ -13,7 +13,7 @@ import {
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import client from "../api/client";
+import { projectsApi } from "../api/endpoints";
 
 type Project = {
   id: string;
@@ -39,11 +39,11 @@ export default function ProjectsPage() {
 
   const loadProjects = async () => {
     try {
-      const projectsResponse = await client.get<Project[]>("/api/projects");
+      const projectsResponse = await projectsApi.list();
       setProjects(projectsResponse.data);
       const environmentResponses = await Promise.allSettled(
         projectsResponse.data.map(async (project) => {
-          const response = await client.get<Environment[]>(`/api/projects/${project.id}/environments`);
+          const response = await projectsApi.listEnvironments(project.id);
           return [project.id, response.data] as const;
         })
       );
@@ -70,7 +70,7 @@ export default function ProjectsPage() {
   const handleCreate = async (event: FormEvent) => {
     event.preventDefault();
     try {
-      await client.post("/api/projects", { name });
+      await projectsApi.create(name);
       setName("");
       setOpen(false);
       await loadProjects();
@@ -82,7 +82,7 @@ export default function ProjectsPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await client.delete(`/api/projects/${deleteTarget.id}`);
+      await projectsApi.delete(deleteTarget.id);
       setDeleteTarget(null);
       await loadProjects();
     } catch {

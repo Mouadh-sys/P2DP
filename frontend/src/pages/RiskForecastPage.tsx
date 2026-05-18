@@ -24,28 +24,8 @@ import {
   YAxis,
 } from "recharts";
 
-import client from "../api/client";
-
-type RiskFactor = {
-  key: string;
-  label: string;
-  weight: number;
-  contribution: number;
-  impact: string;
-  recommendation: string;
-  findings: string[];
-};
-
-type RiskAssessment = {
-  id: string;
-  env_id: string;
-  score: number;
-  risk_class: "LOW" | "MEDIUM" | "HIGH";
-  factors: RiskFactor[];
-  top_factors: RiskFactor[];
-  recommendations: string[];
-  timestamp: string;
-};
+import { environmentsApi } from "../api/endpoints";
+import type { RiskAssessment } from "../api/types";
 
 function riskChipColor(riskClass: string): "success" | "warning" | "error" {
   switch (riskClass) {
@@ -72,9 +52,7 @@ export default function RiskForecastPage() {
   const loadLatest = useCallback(async () => {
     if (!environmentId) return;
     try {
-      const response = await client.get<RiskAssessment>(
-        `/api/environments/${environmentId}/risk-assessments/latest`
-      );
+      const response = await environmentsApi.latestRisk(environmentId);
       setAssessment(response.data);
       setError("");
     } catch {
@@ -93,9 +71,7 @@ export default function RiskForecastPage() {
     if (!environmentId) return;
     setComputing(true);
     try {
-      const response = await client.post<RiskAssessment>(
-        `/api/environments/${environmentId}/risk-assessments`
-      );
+      const response = await environmentsApi.computeRisk(environmentId);
       setAssessment(response.data);
       setError("");
     } catch {

@@ -2,7 +2,7 @@ import { Alert, Button, Card, CardContent, CircularProgress, Typography } from "
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import client from "../api/client";
+import { projectsApi } from "../api/endpoints";
 
 type Project = { id: string; name: string };
 type Environment = { id: string; project_id: string; target: string; status: string };
@@ -16,10 +16,10 @@ export default function EnvironmentPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const projectsResponse = await client.get<Project[]>("/api/projects");
+        const projectsResponse = await projectsApi.list();
         const pairs = await Promise.all(
           projectsResponse.data.map(async (project) => {
-            const envResponse = await client.get<Environment[]>(`/api/projects/${project.id}/environments`);
+            const envResponse = await projectsApi.listEnvironments(project.id);
             return envResponse.data.map((environment) => ({ project, environment }));
           })
         );

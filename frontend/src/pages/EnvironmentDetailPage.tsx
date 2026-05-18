@@ -14,20 +14,9 @@ import {
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 
-import client from "../api/client";
-
-const jaegerUiBase = (import.meta.env.VITE_JAEGER_UI_URL as string | undefined)?.replace(/\/$/, "") ?? "http://localhost:16686";
-
-function jaegerTraceUrl(traceId: string): string {
-  return `${jaegerUiBase}/trace/${traceId}`;
-}
-
-type Environment = {
-  id: string;
-  project_id: string;
-  target: "dev" | "local-k8s";
-  status: string;
-};
+import { environmentsApi, projectsApi, templateVersionsApi } from "../api/endpoints";
+import { jaegerTraceUrl } from "../api/jaeger";
+import type { Environment } from "../api/types";
 
 export default function EnvironmentDetailPage() {
   const navigate = useNavigate();
@@ -39,6 +28,7 @@ export default function EnvironmentDetailPage() {
   const [templateVersionByEnv, setTemplateVersionByEnv] = useState<Record<string, string>>({});
   const [scanningEnvId, setScanningEnvId] = useState<string | null>(null);
   const [deployingEnvId, setDeployingEnvId] = useState<string | null>(null);
+  const [postScanningEnvId, setPostScanningEnvId] = useState<string | null>(null);
   const [deploymentTraceByEnv, setDeploymentTraceByEnv] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -46,7 +36,7 @@ export default function EnvironmentDetailPage() {
   const loadEnvironments = useCallback(async () => {
     if (!projectId) return;
     try {
-      const listResponse = await client.get<Environment[]>(`/api/projects/${projectId}/environments`);
+      const listResponse = await projectsApi.listEnvironments(projectId);
       if (listResponse.data.length === 0) {
         setEnvironments([]);
         setError("");
@@ -54,9 +44,22 @@ export default function EnvironmentDetailPage() {
       }
 
       const details = await Promise.all(
-        listResponse.data.map((env) => client.get<Environment>(`/api/environments/${env.id}`).then((r) => r.data))
+        listResponse.data.map((env) => environmentsApi.get(env.id).then((r) => r.data))
       );
       setEnvironments(details);
+
+      const traces: Record<string, string> = {};
+      await Promise.all(
+        details.map(async (env) => {
+          try {
+            const dep = await environmentsApi.latestDeployment(env.id);
+            if (dep.data.trace_id) traces[env.id] = dep.data.trace_id;
+          } catch {
+            // no deployment yet
+          }
+        })
+      );
+      setDeploymentTraceByEnv(traces);
       setError("");
     } catch {
       setError("Failed to load environments.");
@@ -71,7 +74,7 @@ export default function EnvironmentDetailPage() {
     event.preventDefault();
     if (!projectId) return;
     try {
-      await client.post(`/api/projects/${projectId}/environments`, { target, status });
+      await projectsApi.createEnvironment(projectId, { target, status });
       setMessage("Environment created successfully.");
       setError("");
       await loadEnvironments();
@@ -86,12 +89,8 @@ export default function EnvironmentDetailPage() {
       setError("Please choose a file first.");
       return;
     }
-    const formData = new FormData();
-    formData.append("file", file);
     try {
-      const response = await client.post(`/api/environments/${environmentId}/upload`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const response = await environmentsApi.uploadTemplate(environmentId, file);
       setTemplateVersionByEnv((prev) => ({
         ...prev,
         [environmentId]: response.data.id,
@@ -110,12 +109,7 @@ export default function EnvironmentDetailPage() {
     }
     setDeployingEnvId(environmentId);
     try {
-      const response = await client.post<{
-        deployment_id: string;
-        status: string;
-        git_commit: string | null;
-        trace_id: string | null;
-      }>(`/api/environments/${environmentId}/deploy`);
+      const response = await environmentsApi.deploy(environmentId);
       if (response.data.trace_id) {
         setDeploymentTraceByEnv((prev) => ({ ...prev, [environmentId]: response.data.trace_id! }));
       }
@@ -125,6 +119,19 @@ export default function EnvironmentDetailPage() {
       setError("Failed to start deployment.");
     } finally {
       setDeployingEnvId(null);
+    }
+  };
+
+  const handlePostDeploymentScan = async (environmentId: string) => {
+    setPostScanningEnvId(environmentId);
+    try {
+      const response = await environmentsApi.postDeploymentScan(environmentId);
+      setMessage(`Post-deployment scan queued (task ${response.data.task_id}).`);
+      setError("");
+    } catch {
+      setError("Failed to start post-deployment scan.");
+    } finally {
+      setPostScanningEnvId(null);
     }
   };
 
@@ -138,9 +145,7 @@ export default function EnvironmentDetailPage() {
 
     setScanningEnvId(environmentId);
     try {
-      const response = await client.post<{ scan_id: string; status: string }>(
-        `/api/template-versions/${templateVersionId}/scan`
-      );
+      const response = await templateVersionsApi.scan(templateVersionId);
       navigate(
         `/projects/${projectId}/environments/${environmentId}/findings?templateVersionId=${templateVersionId}&scanId=${response.data.scan_id}`
       );
@@ -268,6 +273,14 @@ export default function EnvironmentDetailPage() {
                     to={`/projects/${projectId}/environments/${environment.id}/risk`}
                   >
                     Risk forecast
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="warning"
+                    disabled={postScanningEnvId === environment.id}
+                    onClick={() => handlePostDeploymentScan(environment.id)}
+                  >
+                    {postScanningEnvId === environment.id ? "Queuing scan…" : "Run post-deployment scan"}
                   </Button>
                   <Button
                     variant="contained"

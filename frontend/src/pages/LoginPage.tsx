@@ -13,7 +13,7 @@ import {
   createTheme,
 } from "@mui/material";
 
-import client from "../api/client";
+import { authApi } from "../api/endpoints";
 
 const theme = createTheme({
   palette: {
@@ -56,12 +56,7 @@ export default function LoginPage() {
     event.preventDefault();
     setError("");
     try {
-      const form = new URLSearchParams();
-      form.append("username", email);
-      form.append("password", password);
-      const response = await client.post("/api/auth/token", form.toString(), {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      });
+      const response = await authApi.login(email, password);
       localStorage.setItem("token", response.data.access_token);
       navigate("/dashboard");
     } catch {

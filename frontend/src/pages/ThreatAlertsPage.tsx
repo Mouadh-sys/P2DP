@@ -1,107 +1,177 @@
-import { 
-  Typography, 
-  Card, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
+import {
+  Alert,
+  Card,
   Chip,
-  Button
-} from '@mui/material';
-import { AlertOctagon, CheckCircle, Clock } from 'lucide-react';
+  CircularProgress,
+  MenuItem,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { useCallback, useEffect, useState } from "react";
 
-const mockAlerts = [
-  { id: 'ALT-8219', time: '2 mins ago', source: 'Falco', type: 'Terminal Exec', severity: 'Critical', evidence: 'bash executed in pod/payment-api-4z', status: 'Open' },
-  { id: 'ALT-8218', time: '15 mins ago', source: 'KubeAudit', type: 'Privilege Escalation', severity: 'High', evidence: 'ServiceAccount requested cluster-admin', status: 'Investigating' },
-  { id: 'ALT-8217', time: '1 hour ago', source: 'NetworkPolicy', type: 'Denied Traffic', severity: 'Low', evidence: 'Ingress from 10.0.0.5 blocked', status: 'Resolved' },
-  { id: 'ALT-8216', time: '3 hours ago', source: 'Falco', type: 'File Deletion', severity: 'Medium', evidence: 'rm -rf /var/logs in pod/nginx', status: 'Open' },
-];
+import { findingsApi, projectsApi } from "../api/endpoints";
+import type { Environment, Finding, Project } from "../api/types";
 
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'Open': return 'error';
-    case 'Investigating': return 'warning';
-    case 'Resolved': return 'success';
-    default: return 'default';
+function severityColor(severity: string): "default" | "success" | "warning" | "error" {
+  switch (severity.toUpperCase()) {
+    case "CRITICAL":
+    case "HIGH":
+      return "error";
+    case "MEDIUM":
+      return "warning";
+    case "LOW":
+      return "success";
+    default:
+      return "default";
   }
-};
+}
 
 export default function ThreatAlertsPage() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [projectId, setProjectId] = useState("");
+  const [environmentId, setEnvironmentId] = useState("");
+  const [alerts, setAlerts] = useState<Finding[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    projectsApi
+      .list()
+      .then((r) => setProjects(r.data))
+      .catch(() => setError("Failed to load projects."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!projectId) {
+      setEnvironments([]);
+      setEnvironmentId("");
+      return;
+    }
+    projectsApi.listEnvironments(projectId).then((r) => {
+      setEnvironments(r.data);
+      setEnvironmentId(r.data[0]?.id ?? "");
+    });
+  }, [projectId]);
+
+  const loadAlerts = useCallback(async () => {
+    if (!environmentId) {
+      setAlerts([]);
+      return;
+    }
+    try {
+      const response = await findingsApi.list(environmentId, {
+        engine: "simulated_logs",
+        phase: "POST_DEPLOYMENT",
+      });
+      setAlerts(response.data);
+      setError("");
+    } catch {
+      setError("Failed to load threat alerts.");
+    }
+  }, [environmentId]);
+
+  useEffect(() => {
+    loadAlerts();
+  }, [loadAlerts]);
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <Typography variant="h4" className="font-bold text-slate-900 tracking-tight">Threat Alerts</Typography>
-          <Typography variant="body1" className="text-slate-500 mt-1 text-sm font-medium">Runtime detections and security events</Typography>
-        </div>
-      </div>
+      <Typography variant="h4" className="font-bold text-slate-900 tracking-tight">
+        Threat Alerts
+      </Typography>
+      <Typography variant="body2" className="text-slate-500">
+        Layer 4 simulated log detections (SSH brute force, port scan, suspicious exec). Falco-backed{" "}
+        <code>threat_alerts</code> rows appear in generated HTML reports when present.
+      </Typography>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card className="bg-rose-50 border-rose-200 p-4 flex items-center shadow-sm">
-          <AlertOctagon size={32} className="text-rose-600 mr-4" />
-          <div>
-            <Typography variant="h5" className="text-slate-900 font-bold">2</Typography>
-            <Typography variant="body2" className="text-slate-600 text-xs font-medium uppercase tracking-wider">Open Critical Alerts</Typography>
-          </div>
-        </Card>
-        <Card className="bg-amber-50 border-amber-200 p-4 flex items-center shadow-sm">
-          <Clock size={32} className="text-amber-600 mr-4" />
-          <div>
-            <Typography variant="h5" className="text-slate-900 font-bold">1</Typography>
-            <Typography variant="body2" className="text-slate-600 text-xs font-medium uppercase tracking-wider">Investigating</Typography>
-          </div>
-        </Card>
-        <Card className="bg-emerald-50 border-emerald-200 p-4 flex items-center shadow-sm">
-          <CheckCircle size={32} className="text-emerald-600 mr-4" />
-          <div>
-            <Typography variant="h5" className="text-slate-900 font-bold">14</Typography>
-            <Typography variant="body2" className="text-slate-600 text-xs font-medium uppercase tracking-wider">Resolved Today</Typography>
-          </div>
-        </Card>
+      {error ? <Alert severity="error">{error}</Alert> : null}
+
+      <div className="flex flex-wrap gap-3">
+        <TextField
+          select
+          label="Project"
+          value={projectId}
+          onChange={(e) => setProjectId(e.target.value)}
+          size="small"
+          sx={{ minWidth: 200 }}
+        >
+          <MenuItem value="">All projects</MenuItem>
+          {projects.map((p) => (
+            <MenuItem key={p.id} value={p.id}>
+              {p.name}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          label="Environment"
+          value={environmentId}
+          onChange={(e) => setEnvironmentId(e.target.value)}
+          size="small"
+          sx={{ minWidth: 200 }}
+          disabled={!projectId}
+        >
+          <MenuItem value="">Select environment</MenuItem>
+          {environments.map((env) => (
+            <MenuItem key={env.id} value={env.id}>
+              {env.target}
+            </MenuItem>
+          ))}
+        </TextField>
       </div>
 
       <Card className="bg-white border-slate-200 shadow-sm">
         <TableContainer>
-          <Table>
+          <Table size="small">
             <TableHead>
               <TableRow className="bg-slate-50">
-                <TableCell className="text-slate-400 font-bold border-b border-slate-200 text-[10px] uppercase tracking-wider">Timestamp</TableCell>
-                <TableCell className="text-slate-400 font-bold border-b border-slate-200 text-[10px] uppercase tracking-wider">Alert ID</TableCell>
-                <TableCell className="text-slate-400 font-bold border-b border-slate-200 text-[10px] uppercase tracking-wider">Source / Type</TableCell>
-                <TableCell className="text-slate-400 font-bold border-b border-slate-200 text-[10px] uppercase tracking-wider">Severity</TableCell>
-                <TableCell className="text-slate-400 font-bold border-b border-slate-200 text-[10px] uppercase tracking-wider">Evidence</TableCell>
-                <TableCell className="text-slate-400 font-bold border-b border-slate-200 text-[10px] uppercase tracking-wider">Status</TableCell>
-                <TableCell className="text-slate-400 font-bold border-b border-slate-200 text-[10px] uppercase tracking-wider w-24">Actions</TableCell>
+                <TableCell>Severity</TableCell>
+                <TableCell>Rule</TableCell>
+                <TableCell>Resource</TableCell>
+                <TableCell>Evidence</TableCell>
+                <TableCell>Recommendation</TableCell>
               </TableRow>
             </TableHead>
-            <TableBody className="text-xs divide-y divide-slate-100">
-              {mockAlerts.map((row) => (
-                <TableRow key={row.id} className="hover:bg-slate-50 transition-colors">
-                  <TableCell className="text-slate-600 border-b border-slate-100 whitespace-nowrap text-xs">{row.time}</TableCell>
-                  <TableCell className="text-slate-700 font-mono text-[10px] border-b border-slate-100">{row.id}</TableCell>
-                  <TableCell className="border-b border-slate-100">
-                    <div className="text-slate-800 font-bold text-xs">{row.type}</div>
-                    <div className="text-slate-500 text-[10px]">{row.source}</div>
-                  </TableCell>
-                  <TableCell className="border-b border-slate-100">
-                    <Chip 
-                      label={row.severity} 
-                      size="small" 
-                      color={row.severity === 'Critical' ? 'error' : row.severity === 'High' ? 'warning' : row.severity === 'Medium' ? 'info' : 'default'} 
-                      sx={{ height: '20px', fontSize: '10px', fontWeight: 'bold' }} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-slate-600 text-xs border-b border-slate-100">{row.evidence}</TableCell>
-                  <TableCell className="border-b border-slate-100">
-                    <Chip label={row.status} size="small" variant="filled" color={getStatusColor(row.status) as any} sx={{ height: '20px', fontSize: '10px', fontWeight: 'bold' }} />
-                  </TableCell>
-                  <TableCell className="border-b border-slate-100">
-                    <Button size="small" variant="text" color="primary" sx={{ minWidth: '40px', p: '2px 8px' }}>View</Button>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    <CircularProgress size={24} />
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : !environmentId ? (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    Select a project and environment.
+                  </TableCell>
+                </TableRow>
+              ) : alerts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    No simulated log alerts. Run a post-deployment scan after deploy.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                alerts.map((alert) => (
+                  <TableRow key={alert.id} hover>
+                    <TableCell>
+                      <Chip label={alert.severity} color={severityColor(alert.severity)} size="small" />
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{alert.rule_id}</TableCell>
+                    <TableCell>{alert.resource}</TableCell>
+                    <TableCell>{alert.evidence ?? "—"}</TableCell>
+                    <TableCell>{alert.recommendation ?? "—"}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>

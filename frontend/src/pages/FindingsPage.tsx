@@ -18,30 +18,11 @@ import { Download, Filter } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link as RouterLink, useParams, useSearchParams } from "react-router-dom";
 
-import client from "../api/client";
-
-type Finding = {
-  id: string;
-  env_id: string;
-  layer: string;
-  phase: string;
-  engine: string;
-  rule_id: string;
-  severity: string;
-  resource: string;
-  evidence: string | null;
-  recommendation: string | null;
-};
-
-type ScanStatus = {
-  id: string;
-  status: string;
-  findings_count: number;
-  error_message: string | null;
-};
+import { findingsApi, templateVersionsApi } from "../api/endpoints";
+import type { Finding, ScanStatus } from "../api/types";
 
 const SEVERITIES = ["", "LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
-const ENGINES = ["", "trivy", "checkov", "policies"] as const;
+const ENGINES = ["", "trivy", "checkov", "policies", "simulated_logs"] as const;
 const PHASES = ["", "PRE_DEPLOYMENT", "POST_DEPLOYMENT"] as const;
 
 function severityColor(severity: string): "default" | "success" | "warning" | "error" {
@@ -79,7 +60,7 @@ export default function FindingsPage() {
       if (severity) params.severity = severity;
       if (engine) params.engine = engine;
       if (phase) params.phase = phase;
-      const response = await client.get<Finding[]>(`/api/findings/environments/${environmentId}`, { params });
+      const response = await findingsApi.list(environmentId, params);
       setFindings(response.data);
       setError("");
     } catch {
@@ -91,9 +72,7 @@ export default function FindingsPage() {
 
   const pollScanStatus = useCallback(async () => {
     if (!templateVersionId || !scanId) return null;
-    const response = await client.get<ScanStatus>(
-      `/api/template-versions/${templateVersionId}/scan/${scanId}`
-    );
+    const response = await templateVersionsApi.scanStatus(templateVersionId, scanId);
     setScanStatus(response.data);
     return response.data.status;
   }, [templateVersionId, scanId]);
