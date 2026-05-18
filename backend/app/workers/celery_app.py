@@ -6,5 +6,5 @@ celery_app = Celery(
     "p2dp",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.workers.validation_tasks", "app.workers.scan_tasks"],
+    include=["app.workers.validation_tasks", "app.workers.scan_tasks", "app.workers.deploy_tasks"],
 )

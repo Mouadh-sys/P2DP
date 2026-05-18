@@ -12,6 +12,7 @@ from app.services.scanner_service import (
 )
 
 FINDING_LAYER = "L2"
+PHASE_PRE_DEPLOYMENT = "PRE_DEPLOYMENT"
 SCAN_ENGINES: list[tuple[str, object]] = [
     ("trivy", scan_template_with_trivy),
     ("checkov", scan_template_with_checkov),
@@ -24,12 +25,20 @@ def replace_findings_for_engine(
     env_id: uuid.UUID,
     engine: str,
     payloads: list[dict[str, str | None]],
+    phase: str = PHASE_PRE_DEPLOYMENT,
 ) -> list[Finding]:
-    db.execute(delete(Finding).where(Finding.env_id == env_id, Finding.engine == engine))
+    db.execute(
+        delete(Finding).where(
+            Finding.env_id == env_id,
+            Finding.engine == engine,
+            Finding.phase == phase,
+        )
+    )
     findings = [
         Finding(
             env_id=env_id,
             layer=FINDING_LAYER,
+            phase=phase,
             engine=engine,
             rule_id=payload["rule_id"],
             severity=payload["severity"],
@@ -69,7 +78,7 @@ def execute_pre_deployment_scan(db: Session, scan: PreDeploymentScan) -> None:
     try:
         results, errors = run_pre_deployment_scan(template_version.files_ref)
         for engine, payloads in results.items():
-            replace_findings_for_engine(db, scan.env_id, engine, payloads)
+            replace_findings_for_engine(db, scan.env_id, engine, payloads, phase=PHASE_PRE_DEPLOYMENT)
         db.commit()
 
         if errors and not any(results.values()):

@@ -1,17 +1,22 @@
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from opentelemetry import trace
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_current_user
 from app.db.database import get_db
-from app.db.models import Environment, Finding, Project, RiskAssessment, TemplateVersion, User
+from app.db.models import DeploymentRun, Environment, Finding, Project, RiskAssessment, TemplateVersion, User
+from app.schemas.deployment import DeploymentRunRead, to_deployment_read
 from app.schemas.environment import EnvironmentRead
 from app.schemas.risk import RiskAssessmentRead, RiskFactorDetail
 from app.schemas.template_version import TemplateVersionRead
 from app.services.risk_service import build_risk_assessment, parse_assessment_payload
 from app.services.storage_service import storage_service
+from app.workers.deploy_tasks import deploy_environment_task
+from app.workers.scan_tasks import scan_post_deployment_task
 
 router = APIRouter()
 
@@ -98,6 +103,85 @@ async def get_latest_risk_assessment(
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk assessment not found")
     return _to_risk_read(assessment)
+
+
+@router.post(
+    "/{environment_id}/deploy",
+    response_model=DeploymentRunRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def deploy_environment(
+    environment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DeploymentRunRead:
+    environment = await _get_environment_for_user(environment_id, db, current_user)
+
+    template_result = await db.execute(
+        select(TemplateVersion)
+        .where(TemplateVersion.env_id == environment.id)
+        .order_by(TemplateVersion.created_at.desc())
+        .limit(1)
+    )
+    if not template_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Upload a template before deploying.",
+        )
+
+    deployment_id = uuid.uuid4()
+    span = trace.get_current_span()
+    trace_id = None
+    if span.is_recording():
+        trace_id = format(span.get_span_context().trace_id, "032x")
+
+    deployment_run = DeploymentRun(
+        id=deployment_id,
+        env_id=environment.id,
+        status="RUNNING",
+        trace_id=trace_id,
+        started_at=datetime.now(timezone.utc),
+    )
+    db.add(deployment_run)
+    await db.commit()
+    await db.refresh(deployment_run)
+
+    deploy_environment_task.delay(str(deployment_id))
+    return to_deployment_read(deployment_run)
+
+
+@router.get("/{environment_id}/deployments/latest", response_model=DeploymentRunRead)
+async def get_latest_deployment(
+    environment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DeploymentRunRead:
+    await _get_environment_for_user(environment_id, db, current_user)
+
+    result = await db.execute(
+        select(DeploymentRun)
+        .where(DeploymentRun.env_id == environment_id)
+        .order_by(DeploymentRun.started_at.desc())
+        .limit(1)
+    )
+    deployment_run = result.scalar_one_or_none()
+    if not deployment_run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deployment not found")
+    return to_deployment_read(deployment_run)
+
+
+@router.post(
+    "/{environment_id}/scan/post-deployment",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def trigger_post_deployment_scan(
+    environment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    await _get_environment_for_user(environment_id, db, current_user)
+    task = scan_post_deployment_task.delay(str(environment_id))
+    return {"status": "queued", "task_id": task.id, "env_id": str(environment_id)}
 
 
 @router.post("/{environment_id}/upload", response_model=TemplateVersionRead, status_code=status.HTTP_201_CREATED)

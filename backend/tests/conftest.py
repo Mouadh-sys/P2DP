@@ -12,7 +12,7 @@ os.environ.setdefault("MINIO_SECRET_KEY", "test")
 os.environ.setdefault("ENVIRONMENT", "test")
 
 from app.db.database import Base, get_db  # noqa: E402
-from app.db.models import Artifact, PreDeploymentScan, RiskAssessment  # noqa: E402,F401
+from app.db.models import Artifact, DeploymentRun, PreDeploymentScan, RiskAssessment  # noqa: E402,F401
 from app.main import app  # noqa: E402
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"

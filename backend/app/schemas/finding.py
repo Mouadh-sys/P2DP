@@ -7,6 +7,7 @@ class FindingRead(BaseModel):
     id: uuid.UUID
     env_id: uuid.UUID
     layer: str
+    phase: str
     engine: str
     rule_id: str
     severity: str

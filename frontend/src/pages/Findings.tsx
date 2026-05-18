@@ -25,6 +25,7 @@ type Finding = {
   id: string;
   env_id: string;
   layer: string;
+  phase: string;
   engine: string;
   rule_id: string;
   severity: string;
@@ -42,6 +43,7 @@ type ScanStatus = {
 
 const SEVERITIES = ["", "LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 const ENGINES = ["", "trivy", "checkov", "policies"] as const;
+const PHASES = ["", "PRE_DEPLOYMENT", "POST_DEPLOYMENT"] as const;
 
 function severityColor(severity: string): "default" | "success" | "warning" | "error" {
   switch (severity) {
@@ -66,6 +68,7 @@ export default function Findings() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [severity, setSeverity] = useState("");
   const [engine, setEngine] = useState("");
+  const [phase, setPhase] = useState("");
   const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -76,6 +79,7 @@ export default function Findings() {
       const params: Record<string, string> = {};
       if (severity) params.severity = severity;
       if (engine) params.engine = engine;
+      if (phase) params.phase = phase;
       const response = await client.get<Finding[]>(`/api/findings/environments/${environmentId}`, { params });
       setFindings(response.data);
       setError("");
@@ -84,7 +88,7 @@ export default function Findings() {
     } finally {
       setLoading(false);
     }
-  }, [environmentId, severity, engine]);
+  }, [environmentId, severity, engine, phase]);
 
   const pollScanStatus = useCallback(async () => {
     if (!templateVersionId || !scanId) return null;
@@ -186,6 +190,20 @@ export default function Findings() {
             </MenuItem>
           ))}
         </TextField>
+        <TextField
+          select
+          label="Phase"
+          value={phase}
+          onChange={(e) => setPhase(e.target.value)}
+          sx={{ minWidth: 200 }}
+        >
+          <MenuItem value="">All</MenuItem>
+          {PHASES.filter(Boolean).map((value) => (
+            <MenuItem key={value} value={value}>
+              {value === "PRE_DEPLOYMENT" ? "Pre-deployment" : "Post-deployment"}
+            </MenuItem>
+          ))}
+        </TextField>
       </Stack>
 
       <TableContainer component={Paper}>
@@ -193,6 +211,7 @@ export default function Findings() {
           <TableHead>
             <TableRow>
               <TableCell>Severity</TableCell>
+              <TableCell>Phase</TableCell>
               <TableCell>Engine</TableCell>
               <TableCell>Rule</TableCell>
               <TableCell>Resource</TableCell>
@@ -203,13 +222,13 @@ export default function Findings() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">
+                <TableCell colSpan={7} align="center">
                   <CircularProgress size={24} />
                 </TableCell>
               </TableRow>
             ) : findings.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">
+                <TableCell colSpan={7} align="center">
                   No findings match the selected filters.
                 </TableCell>
               </TableRow>
@@ -218,6 +237,13 @@ export default function Findings() {
                 <TableRow key={finding.id} hover>
                   <TableCell>
                     <Chip label={finding.severity} color={severityColor(finding.severity)} size="small" />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={finding.phase === "POST_DEPLOYMENT" ? "Post" : "Pre"}
+                      size="small"
+                      variant="outlined"
+                    />
                   </TableCell>
                   <TableCell>{finding.engine}</TableCell>
                   <TableCell>{finding.rule_id}</TableCell>

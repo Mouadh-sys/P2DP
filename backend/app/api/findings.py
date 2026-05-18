@@ -33,6 +33,7 @@ async def list_environment_findings(
     environment_id: uuid.UUID,
     severity: str | None = Query(default=None),
     engine: str | None = Query(default=None),
+    phase: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[Finding]:
@@ -43,6 +44,10 @@ async def list_environment_findings(
         query = query.where(Finding.severity == severity.upper())
     if engine:
         query = query.where(Finding.engine == engine.lower())
+    if phase:
+        query = query.where(Finding.phase == phase.upper())
 
-    result = await db.execute(query.order_by(Finding.severity.desc(), Finding.engine.asc(), Finding.rule_id.asc()))
+    result = await db.execute(
+        query.order_by(Finding.phase.asc(), Finding.severity.desc(), Finding.engine.asc(), Finding.rule_id.asc())
+    )
     return list(result.scalars().all())

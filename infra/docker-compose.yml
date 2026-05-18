@@ -66,8 +66,14 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-p2dp}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-p2dp12345}
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      GITOPS_REPO_PATH: /gitops-repo
+      GITOPS_REMOTE_URL: ${GITOPS_REMOTE_URL:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      ARGOCD_SERVER: ${ARGOCD_SERVER:-}
+      ARGOCD_TOKEN: ${ARGOCD_TOKEN:-}
     volumes:
       - ../backend:/app
+      - ../gitops-repo:/gitops-repo
     command: uvicorn app.main:app --host 0.0.0.0 --reload
 
   celery-worker:
@@ -84,8 +90,15 @@ services:
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-p2dp}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-p2dp12345}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      GITOPS_REPO_PATH: /gitops-repo
+      GITOPS_REMOTE_URL: ${GITOPS_REMOTE_URL:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      ARGOCD_SERVER: ${ARGOCD_SERVER:-}
+      ARGOCD_TOKEN: ${ARGOCD_TOKEN:-}
     volumes:
       - ../backend:/app
+      - ../gitops-repo:/gitops-repo
     command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
 
   frontend:

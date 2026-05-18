@@ -31,6 +31,7 @@ export default function EnvironmentDetail() {
   const [fileByEnv, setFileByEnv] = useState<Record<string, File | null>>({});
   const [templateVersionByEnv, setTemplateVersionByEnv] = useState<Record<string, string>>({});
   const [scanningEnvId, setScanningEnvId] = useState<string | null>(null);
+  const [deployingEnvId, setDeployingEnvId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -91,6 +92,31 @@ export default function EnvironmentDetail() {
       setError("");
     } catch {
       setError("Failed to upload template archive.");
+    }
+  };
+
+  const handleDeploy = async (environmentId: string) => {
+    if (!templateVersionByEnv[environmentId]) {
+      setError("Upload a template archive before deploying.");
+      return;
+    }
+    setDeployingEnvId(environmentId);
+    try {
+      const response = await client.post<{
+        deployment_id: string;
+        status: string;
+        git_commit: string | null;
+        trace_id: string | null;
+      }>(`/api/environments/${environmentId}/deploy`);
+      setMessage(
+        `Deployment ${response.data.deployment_id} started (${response.data.status}).` +
+          (response.data.trace_id ? ` Trace: ${response.data.trace_id}` : "")
+      );
+      setError("");
+    } catch {
+      setError("Failed to start deployment.");
+    } finally {
+      setDeployingEnvId(null);
     }
   };
 
@@ -213,6 +239,14 @@ export default function EnvironmentDetail() {
                     to={`/projects/${projectId}/environments/${environment.id}/risk`}
                   >
                     Risk forecast
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    disabled={!templateVersionByEnv[environment.id] || deployingEnvId === environment.id}
+                    onClick={() => handleDeploy(environment.id)}
+                  >
+                    {deployingEnvId === environment.id ? "Deploying…" : "Deploy to GitOps"}
                   </Button>
                 </Stack>
               </CardContent>

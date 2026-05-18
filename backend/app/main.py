@@ -24,6 +24,7 @@ from app.db.models import (
     Environment,
     PreDeploymentScan,
     Project,
+    DeploymentRun,
     RiskAssessment,
     TemplateVersion,
     User,
@@ -34,7 +35,7 @@ from app.db.models import (
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # import model classes so SQLAlchemy metadata is populated
-    _ = (User, Project, Environment, TemplateVersion, Artifact, PreDeploymentScan, RiskAssessment)
+    _ = (User, Project, Environment, TemplateVersion, Artifact, PreDeploymentScan, RiskAssessment, DeploymentRun)
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
 

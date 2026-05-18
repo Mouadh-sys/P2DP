@@ -13,6 +13,7 @@ def _finding(env_id: uuid.UUID, rule_id: str, evidence: str | None = None) -> Fi
     return Finding(
         env_id=env_id,
         layer="L2",
+        phase="PRE_DEPLOYMENT",
         engine="policies",
         rule_id=rule_id,
         severity="HIGH",

@@ -100,6 +100,7 @@ class Finding(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     env_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("environments.id"), nullable=False, index=True)
     layer: Mapped[str] = mapped_column(String(255), nullable=False)
+    phase: Mapped[str] = mapped_column(String(50), nullable=False, default="PRE_DEPLOYMENT", index=True)
     engine: Mapped[str] = mapped_column(String(255), nullable=False)
     rule_id: Mapped[str] = mapped_column(String(255), nullable=False)
     severity: Mapped[str] = mapped_column(String(50), nullable=False)
