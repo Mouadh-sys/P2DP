@@ -1,14 +1,15 @@
 import re
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.models import Environment, Finding
+from app.db.models import Environment
 from app.services.scanner_service import run_checkov_scan, run_conftest_scan, run_trivy_scan
-from app.services.scan_service import FINDING_LAYER, replace_findings_for_engine
+from app.services.scan_service import replace_findings_for_engine
 
 PHASE_POST_DEPLOYMENT = "POST_DEPLOYMENT"
 SCAN_TIMEOUT_SECONDS = 300

@@ -1,4 +1,3 @@
-import io
 import os
 import uuid
 import zipfile
@@ -102,11 +101,10 @@ class StorageService:
         filename = upload_file.filename or ""
         lower = filename.lower()
 
-        # Only allow archives for now; prefer .zip for MVP
-        if not lower.endswith((".zip", ".tar.gz", ".tgz")):
+        if not lower.endswith(".zip"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Template upload must be an archive (.zip, .tar.gz, or .tgz)",
+                detail="Only .zip uploads are supported for the MVP",
             )
 
         # Stream upload to temporary file to avoid reading whole file into memory
@@ -128,24 +126,18 @@ class StorageService:
             tmpf.flush()
             tmpf.close()
 
-            # If it's a zip, validate internal contents
-            if lower.endswith(".zip"):
-                try:
-                    # zip will raise if invalid
-                    self._validate_zip_contents(tmp)
-                except zipfile.BadZipFile as exc:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Uploaded file is not a valid zip archive",
-                    ) from exc
+            try:
+                self._validate_zip_contents(tmp)
+            except zipfile.BadZipFile as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Uploaded file is not a valid zip archive",
+                ) from exc
 
-            # build object key preserving extension and matching Phase 9 spec
-            suffix = Path(filename).suffix or ""
-            # for double-extension like .tar.gz keep full suffix
-            if lower.endswith(".tar.gz"):
-                suffix = ".tar.gz"
-
-            object_key = f"projects/{project_id}/envs/{environment_id}/templates/{template_version_id}/source{suffix}"
+            object_key = (
+                f"projects/{project_id}/envs/{environment_id}/templates/"
+                f"{template_version_id}/source.zip"
+            )
 
             # upload the temp file to MinIO
             try:

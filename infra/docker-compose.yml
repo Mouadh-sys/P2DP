@@ -1,4 +1,28 @@
-version: "3.9"
+x-backend-environment: &backend-environment
+  ENVIRONMENT: ${ENVIRONMENT:-dev}
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-p2dp}:${POSTGRES_PASSWORD:-p2dp}@postgres:5432/${POSTGRES_DB:-p2dp}
+  REDIS_URL: redis://redis:6379/0
+  MINIO_ENDPOINT: minio:9000
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-p2dp}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-p2dp12345}
+  MINIO_BUCKET: ${MINIO_BUCKET:-p2dp-artifacts}
+  SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+  GITOPS_REPO_PATH: /gitops-repo
+  GITOPS_GIT_USER: ${GITOPS_GIT_USER:-p2dp-bot}
+  GITOPS_GIT_EMAIL: ${GITOPS_GIT_EMAIL:-p2dp-bot@local}
+  GITOPS_REMOTE_URL: ${GITOPS_REMOTE_URL:-}
+  GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+  ARGOCD_SERVER: ${ARGOCD_SERVER:-}
+  ARGOCD_TOKEN: ${ARGOCD_TOKEN:-}
+  ARGOCD_APP_NAME: ${ARGOCD_APP_NAME:-p2dp-dev}
+  KUBECTL_CONTEXT: ${KUBECTL_CONTEXT:-}
+  K8S_NAMESPACE_PREFIX: ${K8S_NAMESPACE_PREFIX:-p2dp}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+
+x-backend-volumes: &backend-volumes
+  - ../backend:/app
+  - ../gitops-repo:/gitops-repo
+  - /var/run/docker.sock:/var/run/docker.sock
 
 services:
   postgres:
@@ -13,7 +37,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U p2dp"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -60,45 +84,39 @@ services:
       minio:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://p2dp:p2dp@postgres:5432/p2dp
-      REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-p2dp}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-p2dp12345}
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      GITOPS_REPO_PATH: /gitops-repo
-      GITOPS_REMOTE_URL: ${GITOPS_REMOTE_URL:-}
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-      ARGOCD_SERVER: ${ARGOCD_SERVER:-}
-      ARGOCD_TOKEN: ${ARGOCD_TOKEN:-}
-    volumes:
-      - ../backend:/app
-      - ../gitops-repo:/gitops-repo
-    command: uvicorn app.main:app --host 0.0.0.0 --reload
+      <<: *backend-environment
+    volumes: *backend-volumes
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   celery-worker:
     build: ../backend
     container_name: p2dp-celery-worker
     depends_on:
-      redis:
-        condition: service_healthy
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://p2dp:p2dp@postgres:5432/p2dp
-      REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-p2dp}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-p2dp12345}
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      GITOPS_REPO_PATH: /gitops-repo
-      GITOPS_REMOTE_URL: ${GITOPS_REMOTE_URL:-}
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-      ARGOCD_SERVER: ${ARGOCD_SERVER:-}
-      ARGOCD_TOKEN: ${ARGOCD_TOKEN:-}
-    volumes:
-      - ../backend:/app
-      - ../gitops-repo:/gitops-repo
+      <<: *backend-environment
+    volumes: *backend-volumes
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A app.workers.celery_app.celery_app inspect ping --timeout=5 2>/dev/null | grep -q pong",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
 
   frontend:
@@ -107,11 +125,43 @@ services:
     ports:
       - "5173:5173"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
     volumes:
       - ../frontend:/app
       - /app/node_modules
-    command: npm run dev -- --host
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:5173"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.64
+    container_name: p2dp-jaeger
+    profiles: [observability]
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.114.0
+    container_name: p2dp-otel-collector
+    profiles: [observability]
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - jaeger
 
 volumes:
   postgres_data:

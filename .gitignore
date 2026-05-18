@@ -12,6 +12,7 @@ AGENTS.md
 .env.*
 !.env.example
 !.env.template
+!infra/.env.example
 backend/.env
 frontend/.env
 frontend/.env.*

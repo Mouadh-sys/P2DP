@@ -1,12 +1,10 @@
 import {
   Alert,
-  Box,
   Button,
+  Card,
   Chip,
   CircularProgress,
   MenuItem,
-  Paper,
-  Stack,
   Table,
   TableBody,
   TableCell,
@@ -16,6 +14,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { Download, Filter } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link as RouterLink, useParams, useSearchParams } from "react-router-dom";
 
@@ -59,7 +58,7 @@ function severityColor(severity: string): "default" | "success" | "warning" | "e
   }
 }
 
-export default function Findings() {
+export default function FindingsPage() {
   const { projectId, environmentId } = useParams();
   const [searchParams] = useSearchParams();
   const templateVersionId = searchParams.get("templateVersionId");
@@ -125,49 +124,71 @@ export default function Findings() {
 
   const scanInProgress = scanStatus?.status === "PENDING" || scanStatus?.status === "RUNNING";
 
-  return (
-    <Box sx={{ p: 3 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Misconfiguration Findings</Typography>
-        <Stack direction="row" spacing={1}>
-          {projectId && environmentId ? (
-            <>
-              <Button component={RouterLink} to={`/projects/${projectId}/environments`} variant="outlined">
-                Back to environment
-              </Button>
-              <Button
-                component={RouterLink}
-                to={`/projects/${projectId}/environments/${environmentId}/risk`}
-                variant="outlined"
-              >
-                Risk forecast
-              </Button>
-            </>
-          ) : null}
-        </Stack>
-      </Stack>
+  if (!environmentId) {
+    return (
+      <Alert severity="info">
+        Open a project environment to view findings.{" "}
+        <Button component={RouterLink} to="/projects" size="small">
+          Go to projects
+        </Button>
+      </Alert>
+    );
+  }
 
-      {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <Typography variant="h4" className="font-bold text-slate-900 tracking-tight">
+            Security Findings
+          </Typography>
+          <Typography variant="body1" className="text-slate-500 mt-1 text-sm font-medium">
+            Cross-layer misconfigurations and vulnerabilities
+          </Typography>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {projectId ? (
+            <Button
+              variant="outlined"
+              component={RouterLink}
+              to={`/projects/${projectId}/environments`}
+            >
+              Back to environment
+            </Button>
+          ) : null}
+          {projectId && environmentId ? (
+            <Button
+              variant="outlined"
+              component={RouterLink}
+              to={`/projects/${projectId}/environments/${environmentId}/risk`}
+            >
+              Risk forecast
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      {error ? <Alert severity="error">{error}</Alert> : null}
 
       {scanStatus ? (
         <Alert
           severity={scanStatus.status === "FAILED" ? "error" : scanStatus.status === "SUCCESS" ? "success" : "info"}
-          sx={{ mb: 2 }}
           icon={scanInProgress ? <CircularProgress size={18} /> : undefined}
         >
           Scan status: {scanStatus.status}
-          {scanStatus.findings_count > 0 ? ` — ${scanStatus.findings_count} finding(s) in environment` : ""}
+          {scanStatus.findings_count > 0 ? ` — ${scanStatus.findings_count} finding(s)` : ""}
           {scanStatus.error_message ? ` — ${scanStatus.error_message}` : ""}
         </Alert>
       ) : null}
 
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} mb={3}>
+      <div className="flex flex-wrap gap-3">
         <TextField
           select
           label="Severity"
           value={severity}
           onChange={(e) => setSeverity(e.target.value)}
-          sx={{ minWidth: 160 }}
+          size="small"
+          sx={{ minWidth: 140 }}
         >
           <MenuItem value="">All</MenuItem>
           {SEVERITIES.filter(Boolean).map((value) => (
@@ -181,7 +202,8 @@ export default function Findings() {
           label="Engine"
           value={engine}
           onChange={(e) => setEngine(e.target.value)}
-          sx={{ minWidth: 160 }}
+          size="small"
+          sx={{ minWidth: 140 }}
         >
           <MenuItem value="">All</MenuItem>
           {ENGINES.filter(Boolean).map((value) => (
@@ -195,7 +217,8 @@ export default function Findings() {
           label="Phase"
           value={phase}
           onChange={(e) => setPhase(e.target.value)}
-          sx={{ minWidth: 200 }}
+          size="small"
+          sx={{ minWidth: 180 }}
         >
           <MenuItem value="">All</MenuItem>
           {PHASES.filter(Boolean).map((value) => (
@@ -204,58 +227,66 @@ export default function Findings() {
             </MenuItem>
           ))}
         </TextField>
-      </Stack>
+        <Button variant="outlined" startIcon={<Filter size={14} />} disabled>
+          Filter
+        </Button>
+        <Button variant="contained" startIcon={<Download size={14} />} disabled>
+          Export CSV
+        </Button>
+      </div>
 
-      <TableContainer component={Paper}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Severity</TableCell>
-              <TableCell>Phase</TableCell>
-              <TableCell>Engine</TableCell>
-              <TableCell>Rule</TableCell>
-              <TableCell>Resource</TableCell>
-              <TableCell>Evidence</TableCell>
-              <TableCell>Recommendation</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={7} align="center">
-                  <CircularProgress size={24} />
-                </TableCell>
+      <Card className="bg-white border-slate-200 shadow-sm">
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow className="bg-slate-50">
+                <TableCell className="text-slate-400 font-bold text-[10px] uppercase">Severity</TableCell>
+                <TableCell className="text-slate-400 font-bold text-[10px] uppercase">Phase</TableCell>
+                <TableCell className="text-slate-400 font-bold text-[10px] uppercase">Engine</TableCell>
+                <TableCell className="text-slate-400 font-bold text-[10px] uppercase">Rule</TableCell>
+                <TableCell className="text-slate-400 font-bold text-[10px] uppercase">Resource</TableCell>
+                <TableCell className="text-slate-400 font-bold text-[10px] uppercase">Evidence</TableCell>
+                <TableCell className="text-slate-400 font-bold text-[10px] uppercase">Recommendation</TableCell>
               </TableRow>
-            ) : findings.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} align="center">
-                  No findings match the selected filters.
-                </TableCell>
-              </TableRow>
-            ) : (
-              findings.map((finding) => (
-                <TableRow key={finding.id} hover>
-                  <TableCell>
-                    <Chip label={finding.severity} color={severityColor(finding.severity)} size="small" />
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center">
+                    <CircularProgress size={24} />
                   </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={finding.phase === "POST_DEPLOYMENT" ? "Post" : "Pre"}
-                      size="small"
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell>{finding.engine}</TableCell>
-                  <TableCell>{finding.rule_id}</TableCell>
-                  <TableCell>{finding.resource}</TableCell>
-                  <TableCell>{finding.evidence ?? "—"}</TableCell>
-                  <TableCell>{finding.recommendation ?? "—"}</TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Box>
+              ) : findings.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center">
+                    No findings match the selected filters.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                findings.map((finding) => (
+                  <TableRow key={finding.id} hover>
+                    <TableCell>
+                      <Chip label={finding.severity} color={severityColor(finding.severity)} size="small" />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={finding.phase === "POST_DEPLOYMENT" ? "Post" : "Pre"}
+                        size="small"
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>{finding.engine}</TableCell>
+                    <TableCell className="font-mono text-xs">{finding.rule_id}</TableCell>
+                    <TableCell>{finding.resource}</TableCell>
+                    <TableCell>{finding.evidence ?? "—"}</TableCell>
+                    <TableCell>{finding.recommendation ?? "—"}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Card>
+    </div>
   );
 }

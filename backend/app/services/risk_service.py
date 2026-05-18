@@ -1,4 +1,3 @@
-import json
 import uuid
 from dataclasses import dataclass
 from typing import Callable
@@ -149,24 +148,22 @@ def build_risk_assessment(env_id: uuid.UUID, findings: list[Finding]) -> RiskAss
     return RiskAssessment(
         env_id=env_id,
         score=result["score"],
-        class_=result["risk_class"],
-        factors_json=json.dumps(
-            {
-                "factors": result["factors"],
-                "top_factors": result["top_factors"],
-                "recommendations": result["recommendations"],
-            }
-        ),
+        risk_class=result["risk_class"],
+        factors_json={
+            "factors": result["factors"],
+            "top_factors": result["top_factors"],
+            "recommendations": result["recommendations"],
+        },
     )
 
 
 def parse_assessment_payload(assessment: RiskAssessment) -> dict:
-    payload = json.loads(assessment.factors_json)
+    payload = assessment.factors_json
     return {
         "id": assessment.id,
         "env_id": assessment.env_id,
         "score": assessment.score,
-        "risk_class": assessment.class_,
+        "risk_class": assessment.risk_class,
         "factors": payload.get("factors", []),
         "top_factors": payload.get("top_factors", []),
         "recommendations": payload.get("recommendations", []),

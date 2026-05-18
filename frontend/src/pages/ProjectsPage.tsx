@@ -1,6 +1,5 @@
 import {
   Alert,
-  Box,
   Button,
   Card,
   CardContent,
@@ -8,8 +7,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Grid2,
-  Stack,
   TextField,
   Typography,
 } from "@mui/material";
@@ -31,7 +28,7 @@ type Environment = {
   status: string;
 };
 
-export default function Projects() {
+export default function ProjectsPage() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [environmentsByProject, setEnvironmentsByProject] = useState<Record<string, Environment[]>>({});
@@ -53,7 +50,10 @@ export default function Projects() {
       setEnvironmentsByProject(
         Object.fromEntries(
           environmentResponses
-            .filter((result): result is PromiseFulfilledResult<readonly [string, Environment[]]> => result.status === "fulfilled")
+            .filter(
+              (result): result is PromiseFulfilledResult<readonly [string, Environment[]]> =>
+                result.status === "fulfilled"
+            )
             .map((result) => result.value)
         )
       );
@@ -91,43 +91,43 @@ export default function Projects() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Projects</Typography>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <Typography variant="h4" className="font-bold text-slate-900 tracking-tight">
+          Projects
+        </Typography>
         <Button variant="contained" onClick={() => setOpen(true)}>
           Create New Project
         </Button>
-      </Stack>
+      </div>
 
-      {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
+      {error ? <Alert severity="error">{error}</Alert> : null}
 
-      <Grid2 container spacing={2}>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {projects.map((project) => (
-          <Grid2 size={{ xs: 12, sm: 6, md: 4 }} key={project.id}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" mb={1}>
-                  {project.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" mb={2}>
-                  Environments:{" "}
-                  {environmentsByProject[project.id]?.length
-                    ? environmentsByProject[project.id].map((env) => env.target).join(", ")
-                    : "none"}
-                </Typography>
-                <Stack direction="row" spacing={1}>
-                  <Button variant="outlined" onClick={() => navigate(`/projects/${project.id}/environments`)}>
-                    Open project
-                  </Button>
-                  <Button variant="outlined" color="error" onClick={() => setDeleteTarget(project)}>
-                    Delete
-                  </Button>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid2>
+          <Card key={project.id} className="bg-white border-slate-200 shadow-sm">
+            <CardContent>
+              <Typography variant="h6" className="text-slate-800 font-bold mb-2">
+                {project.name}
+              </Typography>
+              <Typography variant="body2" className="text-slate-500 mb-4 text-xs">
+                Environments:{" "}
+                {environmentsByProject[project.id]?.length
+                  ? environmentsByProject[project.id].map((env) => env.target).join(", ")
+                  : "none"}
+              </Typography>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outlined" onClick={() => navigate(`/projects/${project.id}/environments`)}>
+                  Open project
+                </Button>
+                <Button variant="outlined" color="error" onClick={() => setDeleteTarget(project)}>
+                  Delete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         ))}
-      </Grid2>
+      </div>
 
       <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} fullWidth maxWidth="sm">
         <DialogTitle>Delete project</DialogTitle>
@@ -145,7 +145,7 @@ export default function Projects() {
       </Dialog>
 
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
-        <Box component="form" onSubmit={handleCreate}>
+        <form onSubmit={handleCreate}>
           <DialogTitle>Create New Project</DialogTitle>
           <DialogContent>
             <TextField
@@ -164,8 +164,8 @@ export default function Projects() {
               Create
             </Button>
           </DialogActions>
-        </Box>
+        </form>
       </Dialog>
-    </Box>
+    </div>
   );
 }

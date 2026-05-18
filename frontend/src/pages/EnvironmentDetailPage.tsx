@@ -22,7 +22,7 @@ type Environment = {
   status: string;
 };
 
-export default function EnvironmentDetail() {
+export default function EnvironmentDetailPage() {
   const navigate = useNavigate();
   const { projectId } = useParams();
   const [target, setTarget] = useState<"dev" | "local-k8s">("local-k8s");
@@ -144,16 +144,21 @@ export default function EnvironmentDetail() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" mb={3}>
-        Environments
-      </Typography>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <Typography variant="h4" className="font-bold text-slate-900 tracking-tight">
+          Environments
+        </Typography>
+        <Button variant="outlined" onClick={() => navigate("/projects")}>
+          Back to projects
+        </Button>
+      </div>
 
-      {message ? <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert> : null}
-      {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
+      {message ? <Alert severity="success">{message}</Alert> : null}
+      {error ? <Alert severity="error">{error}</Alert> : null}
 
       {environments.length === 0 ? (
-        <Box component="form" onSubmit={handleCreateEnvironment} sx={{ mb: 3 }}>
+        <Box component="form" onSubmit={handleCreateEnvironment}>
           <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
             <TextField
               select
@@ -184,7 +189,7 @@ export default function EnvironmentDetail() {
           </Stack>
         </Box>
       ) : (
-        <Typography variant="body2" color="text.secondary" mb={3}>
+        <Typography variant="body2" color="text.secondary">
           This project already has its single MVP environment.
         </Typography>
       )}
@@ -192,12 +197,12 @@ export default function EnvironmentDetail() {
       <Grid2 container spacing={2}>
         {environments.map((environment) => (
           <Grid2 size={{ xs: 12, md: 6 }} key={environment.id}>
-            <Card>
+            <Card className="bg-white border-slate-200 shadow-sm">
               <CardContent>
-                <Typography variant="h6" mb={1}>
+                <Typography variant="h6" className="text-slate-800 font-bold mb-1">
                   {environment.target}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" mb={2}>
+                <Typography variant="body2" className="text-slate-500 mb-3 text-xs">
                   Status: {environment.status}
                 </Typography>
 
@@ -254,6 +259,6 @@ export default function EnvironmentDetail() {
           </Grid2>
         ))}
       </Grid2>
-    </Box>
+    </div>
   );
 }

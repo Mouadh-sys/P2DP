@@ -13,7 +13,7 @@ from app.schemas.project import ProjectCreate, ProjectRead
 router = APIRouter()
 
 
-@router.post("/", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
 async def create_project(
     project_in: ProjectCreate,
     db: AsyncSession = Depends(get_db),
@@ -26,7 +26,7 @@ async def create_project(
     return project
 
 
-@router.get("/", response_model=list[ProjectRead])
+@router.get("", response_model=list[ProjectRead])
 async def list_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

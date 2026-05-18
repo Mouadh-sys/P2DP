@@ -2,17 +2,13 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
-    alerts,
     auth,
-    deployments,
     environments,
     findings,
     projects,
-    reports,
-    risk,
-    templates,
     template_versions,
 )
 from app.core.config import settings
@@ -60,16 +56,23 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
+if settings.environment == "dev":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(environments.router, prefix="/api/environments", tags=["environments"])
-app.include_router(templates.router, prefix="/api/templates", tags=["templates"])
 app.include_router(template_versions.router, prefix="/api/template-versions", tags=["template-versions"])
-app.include_router(deployments.router, prefix="/api/deployments", tags=["deployments"])
 app.include_router(findings.router, prefix="/api/findings", tags=["findings"])
-app.include_router(risk.router, prefix="/api/risk", tags=["risk"])
-app.include_router(alerts.router, prefix="/api/alerts", tags=["alerts"])
-app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 
 
 @app.get("/health", tags=["system"])
