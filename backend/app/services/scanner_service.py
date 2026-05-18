@@ -16,6 +16,7 @@ from app.services.storage_service import storage_service
 
 ALLOWED_SEVERITIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 SCAN_TIMEOUT_SECONDS = 300
+POLICY_DIR = Path(__file__).resolve().parents[1] / "policies"
 
 
 def _normalize_severity(value: str | None) -> str:
@@ -196,6 +197,34 @@ def _parse_checkov_results(data: dict) -> list[dict[str, str | None]]:
     return findings
 
 
+def _parse_conftest_results(data: list[dict] | dict) -> list[dict[str, str | None]]:
+    findings: list[dict[str, str | None]] = []
+    if isinstance(data, dict):
+        results = data.get("results") or []
+    else:
+        results = data
+    for result in results:
+        filename = result.get("filename") or result.get("file") or "unknown"
+        failures = result.get("failures") or []
+        for failure in failures:
+            metadata = failure.get("metadata") or {}
+            rule_id = metadata.get("id") or metadata.get("rule_id") or "opa-policy"
+            severity = _normalize_severity(metadata.get("severity"))
+            resource = metadata.get("resource") or filename
+            evidence = failure.get("msg") or failure.get("message")
+            recommendation = metadata.get("recommendation")
+            findings.append(
+                {
+                    "rule_id": _ensure_text(rule_id, "opa-policy"),
+                    "severity": severity,
+                    "resource": _ensure_text(resource, "unknown"),
+                    "evidence": evidence,
+                    "recommendation": recommendation,
+                }
+            )
+    return findings
+
+
 def run_trivy_scan(path: str) -> dict[str, list[dict[str, str | None]]]:
     resolved_path = str(Path(path).resolve())
     if not Path(resolved_path).is_dir():
@@ -274,6 +303,53 @@ def run_checkov_scan(path: str) -> dict[str, list[dict[str, str | None]]]:
     return {"findings": _parse_checkov_results(data)}
 
 
+def run_conftest_scan(path: str) -> dict[str, list[dict[str, str | None]]]:
+    resolved_path = str(Path(path).resolve())
+    if not Path(resolved_path).is_dir():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Template path is not a directory.")
+    if not POLICY_DIR.exists():
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Policy directory is missing.",
+        )
+    try:
+        try:
+            result = subprocess.run(
+                [
+                    "conftest",
+                    "test",
+                    resolved_path,
+                    "--policy",
+                    str(POLICY_DIR),
+                    "--output",
+                    "json",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=SCAN_TIMEOUT_SECONDS,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Conftest is not installed.") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Conftest scan timed out."
+        ) from exc
+
+    if result.returncode not in {0, 1}:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Conftest scan failed.")
+
+    if not result.stdout.strip():
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Conftest did not return JSON output.")
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Invalid Conftest JSON output.") from exc
+
+    return {"findings": _parse_conftest_results(data)}
+
+
 def scan_template_with_trivy(files_ref: str) -> list[dict[str, str | None]]:
     with _template_workspace(files_ref) as path:
         return run_trivy_scan(path)["findings"]
@@ -282,3 +358,8 @@ def scan_template_with_trivy(files_ref: str) -> list[dict[str, str | None]]:
 def scan_template_with_checkov(files_ref: str) -> list[dict[str, str | None]]:
     with _template_workspace(files_ref) as path:
         return run_checkov_scan(path)["findings"]
+
+
+def scan_template_with_policies(files_ref: str) -> list[dict[str, str | None]]:
+    with _template_workspace(files_ref) as path:
+        return run_conftest_scan(path)["findings"]

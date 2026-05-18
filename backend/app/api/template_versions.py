@@ -9,7 +9,11 @@ from app.core.security import get_current_user
 from app.db.database import get_db
 from app.db.models import Environment, Finding, Project, TemplateVersion, User
 from app.schemas.finding import FindingRead
-from app.services.scanner_service import scan_template_with_checkov, scan_template_with_trivy
+from app.services.scanner_service import (
+    scan_template_with_checkov,
+    scan_template_with_policies,
+    scan_template_with_trivy,
+)
 
 router = APIRouter()
 FINDING_LAYER = "L2"
@@ -85,3 +89,20 @@ async def scan_template_version_checkov(
     )
     payloads = await asyncio.to_thread(scan_template_with_checkov, template_version.files_ref)
     return await _replace_findings(db, environment.id, "checkov", payloads)
+
+
+@router.post(
+    "/{template_version_id}/scan/policies",
+    response_model=list[FindingRead],
+    status_code=status.HTTP_201_CREATED,
+)
+async def scan_template_version_policies(
+    template_version_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[Finding]:
+    template_version, environment, _project = await _get_template_version_for_user(
+        template_version_id, db, current_user
+    )
+    payloads = await asyncio.to_thread(scan_template_with_policies, template_version.files_ref)
+    return await _replace_findings(db, environment.id, "policies", payloads)
