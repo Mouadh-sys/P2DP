@@ -212,5 +212,28 @@ class StorageService:
             f"{template_version_id}/artifacts/validation-log.txt"
         )
 
+    def report_object_key(self, project_id: uuid.UUID, environment_id: uuid.UUID, report_id: uuid.UUID) -> str:
+        return f"projects/{project_id}/envs/{environment_id}/reports/{report_id}.html"
+
+    def get_object_bytes(self, object_key: str) -> bytes:
+        try:
+            response = self.client.get_object(Bucket=self.bucket, Key=object_key)
+            return response["Body"].read()
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Report object not found in storage.",
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to read object from MinIO storage.",
+            ) from exc
+        except (BotoCoreError, OSError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to read object from MinIO storage.",
+            ) from exc
+
 
 storage_service = StorageService()

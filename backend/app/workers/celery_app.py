@@ -13,3 +13,7 @@ celery_app = Celery(
         "app.workers.risk_tasks",
     ],
 )
+
+from app.core.otel import setup_telemetry  # noqa: E402
+
+setup_telemetry("p2dp-worker")

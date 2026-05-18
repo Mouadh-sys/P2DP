@@ -29,12 +29,9 @@ docker compose up --build
 | API        | http://localhost:8000 |
 | API health | http://localhost:8000/health |
 | MinIO      | http://localhost:9001 (console) |
+| Jaeger UI  | http://localhost:16686 |
 
-Optional observability (Jaeger + OpenTelemetry collector):
-
-```bash
-docker compose --profile observability up
-```
+Tracing: the API and Celery worker send OTLP traces to the collector (`OTEL_EXPORTER_OTLP_ENDPOINT`, default `http://otel-collector:4317`). After deploy, the dashboard shows the trace ID with a link to Jaeger.
 
 ## Dev login
 
@@ -54,7 +51,7 @@ Stack: **React 18**, **TypeScript**, **Vite**, **MUI**, **Tailwind CSS**, **Reac
 
 ```bash
 cd frontend
-cp .env.example .env    # set VITE_API_BASE_URL if needed
+cp .env.example .env    # set VITE_API_BASE_URL / VITE_JAEGER_UI_URL if needed
 npm install
 npm run dev             # http://localhost:5173
 ```

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +26,8 @@ class Settings(BaseSettings):
     argocd_app_name: str = "p2dp-dev"
     k8s_namespace_prefix: str = "p2dp"
     kubectl_context: str = ""
+    simulated_logs_path: str = ""
+    otel_exporter_otlp_endpoint: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -31,9 +35,23 @@ class Settings(BaseSettings):
     def resolved_gitops_repo_path(self) -> str:
         if self.gitops_repo_path:
             return self.gitops_repo_path
-        from pathlib import Path
-
         return str(Path(__file__).resolve().parents[3] / "gitops-repo")
+
+    @property
+    def resolved_simulated_logs_path(self) -> str:
+        if self.simulated_logs_path:
+            return self.simulated_logs_path
+        here = Path(__file__).resolve()
+        # Monorepo checkout: repo_root/samples/logs. Docker with only backend mounted: try /samples/logs.
+        candidates = (
+            here.parents[3] / "samples" / "logs",
+            here.parents[2] / "samples" / "logs",
+            Path("/samples/logs"),
+        )
+        for c in candidates:
+            if c.is_dir():
+                return str(c)
+        return str(candidates[0])
 
 
 settings = Settings()

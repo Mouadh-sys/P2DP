@@ -12,7 +12,7 @@ os.environ.setdefault("MINIO_SECRET_KEY", "test")
 os.environ.setdefault("ENVIRONMENT", "test")
 
 from app.db.database import Base, get_db  # noqa: E402
-from app.db.models import Artifact, DeploymentRun, PreDeploymentScan, RiskAssessment  # noqa: E402,F401
+from app.db.models import Artifact, DeploymentRun, PreDeploymentScan, Report, RiskAssessment  # noqa: E402,F401
 from app.main import app  # noqa: E402
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -33,7 +33,7 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_db] = override_get_db
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test", lifespan="off") as client:
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
     app.dependency_overrides.clear()
@@ -42,7 +42,7 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
 
 @pytest_asyncio.fixture
 async def auth_headers(async_client: AsyncClient) -> dict[str, str]:
-    email = "devops@test.local"
+    email = "devops@example.com"
     password = "testpass123"
     await async_client.post(
         "/api/auth/register",

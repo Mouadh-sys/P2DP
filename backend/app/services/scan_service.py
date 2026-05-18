@@ -13,11 +13,14 @@ from app.services.scanner_service import (
 
 FINDING_LAYER = "L2"
 PHASE_PRE_DEPLOYMENT = "PRE_DEPLOYMENT"
-SCAN_ENGINES: list[tuple[str, object]] = [
-    ("trivy", scan_template_with_trivy),
-    ("checkov", scan_template_with_checkov),
-    ("policies", scan_template_with_policies),
-]
+
+
+def get_scan_engines() -> list[tuple[str, object]]:
+    return [
+        ("trivy", scan_template_with_trivy),
+        ("checkov", scan_template_with_checkov),
+        ("policies", scan_template_with_policies),
+    ]
 
 
 def replace_findings_for_engine(
@@ -26,18 +29,21 @@ def replace_findings_for_engine(
     engine: str,
     payloads: list[dict[str, str | None]],
     phase: str = PHASE_PRE_DEPLOYMENT,
+    finding_layer: str | None = None,
 ) -> list[Finding]:
+    layer = finding_layer if finding_layer is not None else FINDING_LAYER
     db.execute(
         delete(Finding).where(
             Finding.env_id == env_id,
             Finding.engine == engine,
             Finding.phase == phase,
+            Finding.layer == layer,
         )
     )
     findings = [
         Finding(
             env_id=env_id,
-            layer=FINDING_LAYER,
+            layer=layer,
             phase=phase,
             engine=engine,
             rule_id=payload["rule_id"],
@@ -56,7 +62,7 @@ def run_pre_deployment_scan(files_ref: str) -> tuple[dict[str, list[dict[str, st
     results: dict[str, list[dict[str, str | None]]] = {}
     errors: dict[str, str] = {}
 
-    for engine, scanner in SCAN_ENGINES:
+    for engine, scanner in get_scan_engines():
         try:
             results[engine] = scanner(files_ref)
         except Exception as exc:  # noqa: BLE001 - collect per-engine failures for unified scan

@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_current_user
@@ -39,7 +39,7 @@ async def list_environment_findings(
 ) -> list[Finding]:
     await _get_environment_for_user(environment_id, db, current_user)
 
-    query = select(Finding).where(Finding.env_id == environment_id, Finding.layer == "L2")
+    query = select(Finding).where(Finding.env_id == environment_id, or_(Finding.layer == "L2", Finding.layer == "L4"))
     if severity:
         query = query.where(Finding.severity == severity.upper())
     if engine:

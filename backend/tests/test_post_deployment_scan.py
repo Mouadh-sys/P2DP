@@ -57,6 +57,7 @@ def test_export_gitops_fallback_state(tmp_path: Path) -> None:
     assert (scan_dir / "deployment.yaml").exists()
 
 
+@patch("app.services.post_deployment_scan_service.analyze_simulated_logs_for_threats", return_value=[])
 @patch("app.services.post_deployment_scan_service.run_post_deployment_scanners")
 @patch("app.services.post_deployment_scan_service.collect_cluster_scan_path")
 def test_execute_post_deployment_scan_saves_post_phase_findings(
@@ -90,7 +91,7 @@ def test_execute_post_deployment_scan_saves_post_phase_findings(
     )
 
     with SessionLocal() as db:
-        user = User(email="scan@test.local", password_hash="x", role=UserRole.DEVOPS)
+        user = User(email="scan@example.com", password_hash="x", role=UserRole.DEVOPS)
         db.add(user)
         db.flush()
         project = Project(name="p", owner_id=user.id)

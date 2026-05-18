@@ -49,29 +49,32 @@ async def _replace_findings(
     phase: str = "PRE_DEPLOYMENT",
 ) -> list[Finding]:
     """Replace existing findings for the environment/engine/phase with the latest scan results."""
-    async with db.begin():
-        await db.execute(
-            delete(Finding).where(
-                Finding.env_id == env_id,
-                Finding.engine == engine,
-                Finding.phase == phase,
-            )
+    await db.execute(
+        delete(Finding).where(
+            Finding.env_id == env_id,
+            Finding.engine == engine,
+            Finding.phase == phase,
         )
-        findings = [
-            Finding(
-                env_id=env_id,
-                layer=FINDING_LAYER,
-                phase=phase,
-                engine=engine,
-                rule_id=payload["rule_id"],
-                severity=payload["severity"],
-                resource=payload["resource"],
-                evidence=payload.get("evidence"),
-                recommendation=payload.get("recommendation"),
-            )
-            for payload in payloads
-        ]
-        db.add_all(findings)
+    )
+
+    findings = [
+        Finding(
+            env_id=env_id,
+            layer=FINDING_LAYER,
+            phase=phase,
+            engine=engine,
+            rule_id=payload["rule_id"],
+            severity=payload["severity"],
+            resource=payload["resource"],
+            evidence=payload.get("evidence"),
+            recommendation=payload.get("recommendation"),
+        )
+        for payload in payloads
+    ]
+
+    db.add_all(findings)
+    await db.commit()
+
     for finding in findings:
         await db.refresh(finding)
     return findings

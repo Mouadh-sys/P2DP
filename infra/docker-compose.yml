@@ -17,11 +17,13 @@ x-backend-environment: &backend-environment
   ARGOCD_APP_NAME: ${ARGOCD_APP_NAME:-p2dp-dev}
   KUBECTL_CONTEXT: ${KUBECTL_CONTEXT:-}
   K8S_NAMESPACE_PREFIX: ${K8S_NAMESPACE_PREFIX:-p2dp}
+  SIMULATED_LOGS_PATH: ${SIMULATED_LOGS_PATH:-/samples/logs}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
 
 x-backend-volumes: &backend-volumes
   - ../backend:/app
   - ../gitops-repo:/gitops-repo
+  - ../samples:/samples:ro
   - /var/run/docker.sock:/var/run/docker.sock
 
 services:
@@ -129,6 +131,7 @@ services:
         condition: service_healthy
     environment:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+      VITE_JAEGER_UI_URL: ${VITE_JAEGER_UI_URL:-http://localhost:16686}
     volumes:
       - ../frontend:/app
       - /app/node_modules
@@ -143,7 +146,6 @@ services:
   jaeger:
     image: jaegertracing/all-in-one:1.64
     container_name: p2dp-jaeger
-    profiles: [observability]
     ports:
       - "16686:16686"
       - "14268:14268"
@@ -153,7 +155,6 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.114.0
     container_name: p2dp-otel-collector
-    profiles: [observability]
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ./otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro

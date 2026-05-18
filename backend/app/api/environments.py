@@ -2,23 +2,26 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from opentelemetry import trace
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.otel import get_tracer
 from app.core.security import get_current_user
 from app.db.database import get_db
 from app.db.models import DeploymentRun, Environment, Finding, Project, RiskAssessment, TemplateVersion, User
 from app.schemas.deployment import DeploymentRunRead, to_deployment_read
 from app.schemas.environment import EnvironmentRead
+from app.schemas.report import ReportCreated
 from app.schemas.risk import RiskAssessmentRead, RiskFactorDetail
 from app.schemas.template_version import TemplateVersionRead
 from app.services.risk_service import build_risk_assessment, parse_assessment_payload
+from app.services.report_service import create_html_report_for_environment
 from app.services.storage_service import storage_service
 from app.workers.deploy_tasks import deploy_environment_task
 from app.workers.scan_tasks import scan_post_deployment_task
 
 router = APIRouter()
+deploy_tracer = get_tracer("p2dp.api")
 
 
 async def _get_environment_for_user(
@@ -115,39 +118,38 @@ async def deploy_environment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> DeploymentRunRead:
-    environment = await _get_environment_for_user(environment_id, db, current_user)
+    with deploy_tracer.start_as_current_span("environments.deploy") as span:
+        environment = await _get_environment_for_user(environment_id, db, current_user)
 
-    template_result = await db.execute(
-        select(TemplateVersion)
-        .where(TemplateVersion.env_id == environment.id)
-        .order_by(TemplateVersion.created_at.desc())
-        .limit(1)
-    )
-    if not template_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Upload a template before deploying.",
+        template_result = await db.execute(
+            select(TemplateVersion)
+            .where(TemplateVersion.env_id == environment.id)
+            .order_by(TemplateVersion.created_at.desc())
+            .limit(1)
         )
+        if not template_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Upload a template before deploying.",
+            )
 
-    deployment_id = uuid.uuid4()
-    span = trace.get_current_span()
-    trace_id = None
-    if span.is_recording():
-        trace_id = format(span.get_span_context().trace_id, "032x")
+        deployment_id = uuid.uuid4()
+        ctx = span.get_span_context()
+        trace_id = format(ctx.trace_id, "032x") if ctx.is_valid else None
 
-    deployment_run = DeploymentRun(
-        id=deployment_id,
-        env_id=environment.id,
-        status="RUNNING",
-        trace_id=trace_id,
-        started_at=datetime.now(timezone.utc),
-    )
-    db.add(deployment_run)
-    await db.commit()
-    await db.refresh(deployment_run)
+        deployment_run = DeploymentRun(
+            id=deployment_id,
+            env_id=environment.id,
+            status="RUNNING",
+            trace_id=trace_id,
+            started_at=datetime.now(timezone.utc),
+        )
+        db.add(deployment_run)
+        await db.commit()
+        await db.refresh(deployment_run)
 
-    deploy_environment_task.delay(str(deployment_id))
-    return to_deployment_read(deployment_run)
+        deploy_environment_task.delay(str(deployment_id))
+        return to_deployment_read(deployment_run)
 
 
 @router.get("/{environment_id}/deployments/latest", response_model=DeploymentRunRead)
@@ -168,6 +170,29 @@ async def get_latest_deployment(
     if not deployment_run:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deployment not found")
     return to_deployment_read(deployment_run)
+
+
+@router.post("/{environment_id}/reports", response_model=ReportCreated, status_code=status.HTTP_201_CREATED)
+async def create_environment_report(
+    environment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ReportCreated:
+    ep = await db.execute(
+        select(Environment, Project)
+        .join(Project, Environment.project_id == Project.id)
+        .where(Environment.id == environment_id, Project.owner_id == current_user.id)
+    )
+    row = ep.first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Environment not found")
+    environment, project = row
+    report = await create_html_report_for_environment(db, environment, project)
+    return ReportCreated(
+        report_id=report.id,
+        env_id=environment.id,
+        download_url=f"/api/reports/{report.id}/download",
+    )
 
 
 @router.post(

@@ -9,6 +9,7 @@ from app.api import (
     environments,
     findings,
     projects,
+    reports,
     template_versions,
 )
 from app.core.config import settings
@@ -17,12 +18,15 @@ from app.db.database import Base, engine, SessionLocal
 from sqlalchemy import select
 from app.db.models import (
     Artifact,
+    DeploymentRun,
     Environment,
+    Finding,
     PreDeploymentScan,
     Project,
-    DeploymentRun,
+    Report,
     RiskAssessment,
     TemplateVersion,
+    ThreatAlert,
     User,
     UserRole,
 )
@@ -31,7 +35,19 @@ from app.db.models import (
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # import model classes so SQLAlchemy metadata is populated
-    _ = (User, Project, Environment, TemplateVersion, Artifact, PreDeploymentScan, RiskAssessment, DeploymentRun)
+    _ = (
+        User,
+        Project,
+        Environment,
+        TemplateVersion,
+        Artifact,
+        PreDeploymentScan,
+        RiskAssessment,
+        DeploymentRun,
+        Finding,
+        ThreatAlert,
+        Report,
+    )
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
 
@@ -56,6 +72,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
+from app.core.otel import setup_telemetry  # noqa: E402
+
+setup_telemetry("p2dp-api")
+
 if settings.environment == "dev":
     app.add_middleware(
         CORSMiddleware,
@@ -73,6 +93,7 @@ app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(environments.router, prefix="/api/environments", tags=["environments"])
 app.include_router(template_versions.router, prefix="/api/template-versions", tags=["template-versions"])
 app.include_router(findings.router, prefix="/api/findings", tags=["findings"])
+app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 
 
 @app.get("/health", tags=["system"])

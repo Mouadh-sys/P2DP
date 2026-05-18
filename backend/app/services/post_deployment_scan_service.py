@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.models import Environment
+from app.services.log_threat_detection_service import analyze_simulated_logs_for_threats
 from app.services.scanner_service import run_checkov_scan, run_conftest_scan, run_trivy_scan
 from app.services.scan_service import replace_findings_for_engine
 
@@ -163,6 +164,19 @@ def execute_post_deployment_scan(db: Session, env_id: uuid.UUID) -> dict[str, st
                 phase=PHASE_POST_DEPLOYMENT,
             )
             saved += len(payloads)
+
+        log_payloads = analyze_simulated_logs_for_threats(Path(settings.resolved_simulated_logs_path))
+        if log_payloads:
+            replace_findings_for_engine(
+                db,
+                env_id,
+                "simulated_logs",
+                log_payloads,
+                phase=PHASE_POST_DEPLOYMENT,
+                finding_layer="L4",
+            )
+            saved += len(log_payloads)
+
         db.commit()
 
         if errors and saved == 0:

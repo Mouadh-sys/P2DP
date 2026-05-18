@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Link,
   MenuItem,
   Grid2,
   Stack,
@@ -14,6 +15,12 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 
 import client from "../api/client";
+
+const jaegerUiBase = (import.meta.env.VITE_JAEGER_UI_URL as string | undefined)?.replace(/\/$/, "") ?? "http://localhost:16686";
+
+function jaegerTraceUrl(traceId: string): string {
+  return `${jaegerUiBase}/trace/${traceId}`;
+}
 
 type Environment = {
   id: string;
@@ -32,6 +39,7 @@ export default function EnvironmentDetailPage() {
   const [templateVersionByEnv, setTemplateVersionByEnv] = useState<Record<string, string>>({});
   const [scanningEnvId, setScanningEnvId] = useState<string | null>(null);
   const [deployingEnvId, setDeployingEnvId] = useState<string | null>(null);
+  const [deploymentTraceByEnv, setDeploymentTraceByEnv] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -108,10 +116,10 @@ export default function EnvironmentDetailPage() {
         git_commit: string | null;
         trace_id: string | null;
       }>(`/api/environments/${environmentId}/deploy`);
-      setMessage(
-        `Deployment ${response.data.deployment_id} started (${response.data.status}).` +
-          (response.data.trace_id ? ` Trace: ${response.data.trace_id}` : "")
-      );
+      if (response.data.trace_id) {
+        setDeploymentTraceByEnv((prev) => ({ ...prev, [environmentId]: response.data.trace_id! }));
+      }
+      setMessage(`Deployment ${response.data.deployment_id} started (${response.data.status}).`);
       setError("");
     } catch {
       setError("Failed to start deployment.");
@@ -205,6 +213,22 @@ export default function EnvironmentDetailPage() {
                 <Typography variant="body2" className="text-slate-500 mb-3 text-xs">
                   Status: {environment.status}
                 </Typography>
+
+                {deploymentTraceByEnv[environment.id] ? (
+                  <Box className="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2">
+                    <Typography variant="body2" className="font-mono text-slate-800">
+                      Trace ID: {deploymentTraceByEnv[environment.id]}
+                    </Typography>
+                    <Link
+                      href={jaegerTraceUrl(deploymentTraceByEnv[environment.id])}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      variant="body2"
+                    >
+                      Open in Jaeger
+                    </Link>
+                  </Box>
+                ) : null}
 
                 <Stack spacing={1}>
                   <Button variant="outlined" component="label">
