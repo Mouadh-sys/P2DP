@@ -11,7 +11,7 @@ import {
   Typography,
 } from "@mui/material";
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 
 import client from "../api/client";
 
@@ -23,11 +23,14 @@ type Environment = {
 };
 
 export default function EnvironmentDetail() {
+  const navigate = useNavigate();
   const { projectId } = useParams();
   const [target, setTarget] = useState<"dev" | "local-k8s">("local-k8s");
   const [status, setStatus] = useState<"pending" | "active" | "failed">("pending");
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [fileByEnv, setFileByEnv] = useState<Record<string, File | null>>({});
+  const [templateVersionByEnv, setTemplateVersionByEnv] = useState<Record<string, string>>({});
+  const [scanningEnvId, setScanningEnvId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -80,10 +83,37 @@ export default function EnvironmentDetail() {
       const response = await client.post(`/api/environments/${environmentId}/upload`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setMessage(`File stored successfully at: ${response.data.files_ref}`);
+      setTemplateVersionByEnv((prev) => ({
+        ...prev,
+        [environmentId]: response.data.id,
+      }));
+      setMessage(`Template uploaded. Version ID: ${response.data.id}`);
       setError("");
     } catch {
       setError("Failed to upload template archive.");
+    }
+  };
+
+  const handleUnifiedScan = async (environmentId: string) => {
+    const templateVersionId = templateVersionByEnv[environmentId];
+    if (!templateVersionId) {
+      setError("Upload a template archive before running a scan.");
+      return;
+    }
+    if (!projectId) return;
+
+    setScanningEnvId(environmentId);
+    try {
+      const response = await client.post<{ scan_id: string; status: string }>(
+        `/api/template-versions/${templateVersionId}/scan`
+      );
+      navigate(
+        `/projects/${projectId}/environments/${environmentId}/findings?templateVersionId=${templateVersionId}&scanId=${response.data.scan_id}`
+      );
+    } catch {
+      setError("Failed to start pre-deployment scan.");
+    } finally {
+      setScanningEnvId(null);
     }
   };
 
@@ -161,6 +191,28 @@ export default function EnvironmentDetail() {
                   </Button>
                   <Button variant="contained" onClick={() => handleUpload(environment.id)}>
                     Upload Template
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    disabled={!templateVersionByEnv[environment.id] || scanningEnvId === environment.id}
+                    onClick={() => handleUnifiedScan(environment.id)}
+                  >
+                    {scanningEnvId === environment.id ? "Starting scan…" : "Run pre-deployment scan"}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    component={RouterLink}
+                    to={`/projects/${projectId}/environments/${environment.id}/findings`}
+                  >
+                    View findings
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    component={RouterLink}
+                    to={`/projects/${projectId}/environments/${environment.id}/risk`}
+                  >
+                    Risk forecast
                   </Button>
                 </Stack>
               </CardContent>

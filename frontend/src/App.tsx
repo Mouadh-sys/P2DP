@@ -1,8 +1,10 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import EnvironmentDetail from "./pages/EnvironmentDetail";
+import Findings from "./pages/Findings";
 import Login from "./pages/Login";
 import Projects from "./pages/Projects";
+import RiskForecast from "./pages/RiskForecast";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = localStorage.getItem("token");
@@ -29,6 +31,22 @@ function App() {
         element={
           <RequireAuth>
             <EnvironmentDetail />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/projects/:projectId/environments/:environmentId/findings"
+        element={
+          <RequireAuth>
+            <Findings />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/projects/:projectId/environments/:environmentId/risk"
+        element={
+          <RequireAuth>
+            <RiskForecast />
           </RequireAuth>
         }
       />

@@ -19,13 +19,22 @@ from app.core.config import settings
 from app.core.security import get_password_hash
 from app.db.database import Base, engine, SessionLocal
 from sqlalchemy import select
-from app.db.models import Artifact, Environment, Project, TemplateVersion, User, UserRole
+from app.db.models import (
+    Artifact,
+    Environment,
+    PreDeploymentScan,
+    Project,
+    RiskAssessment,
+    TemplateVersion,
+    User,
+    UserRole,
+)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # import model classes so SQLAlchemy metadata is populated
-    _ = (User, Project, Environment, TemplateVersion, Artifact)
+    _ = (User, Project, Environment, TemplateVersion, Artifact, PreDeploymentScan, RiskAssessment)
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
 
